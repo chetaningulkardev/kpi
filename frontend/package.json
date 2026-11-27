@@ -54,7 +54,7 @@
     "karma-jasmine": "^5.1.0",
     "postcss": "^8.5.16",
     "prettier": "^3.8.1",
-    "tailwindcss": "^4.3.2",
+    "tailwindcss": "^4.3.5",
     "typescript": "~5.9.2",
     "vitest": "^4.0.8",
     "zone.js": "^0.16.2"
