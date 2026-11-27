@@ -1,0 +1,210 @@
+<section class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-dt-700">My Performance</p>
+      <h1 class="mt-1 text-2xl font-bold text-slate-900">Performance History</h1>
+      <p class="mt-1 text-sm text-slate-500">
+        Your published scorecards across every review cycle.
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <a routerLink="/kpi/my-kpis"
+        class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-700 transition">
+        Go to my KPIs
+      </a>
+      <button type="button" (click)="load()" [disabled]="loading"
+        class="rounded-lg bg-dt-600 hover:bg-dt-700 disabled:opacity-50 px-3 py-2 text-sm font-semibold text-white transition">
+        {{ loading ? 'Refreshing…' : 'Refresh' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Error -->
+  <div *ngIf="errorMessage" role="alert"
+    class="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+    {{ errorMessage }}
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-sm text-slate-500"
+    role="status" aria-live="polite">
+    Loading your performance history…
+  </div>
+
+  <ng-container *ngIf="!loading && !errorMessage">
+
+    <!-- Nothing published yet -->
+    <div *ngIf="!history.length"
+      class="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center">
+      <p class="text-sm font-semibold text-slate-700">No published scorecards yet</p>
+      <p class="mt-1 text-sm text-slate-500">
+        A scorecard appears here once your review cycle has been completed and
+        released. Scores still being calibrated are not shown.
+      </p>
+    </div>
+
+    <ng-container *ngIf="history.length">
+
+      <!-- Summary tiles -->
+      <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+
+        <div class="rounded-xl border border-slate-200 bg-white p-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Latest cycle</p>
+          <p class="mt-1 text-2xl font-bold" [ngClass]="scoreClass(latest?.scorePercentage ?? null)">
+            {{ latest?.scorePercentage !== null && latest?.scorePercentage !== undefined
+                ? latest?.scorePercentage + '%' : 'Not scored' }}
+          </p>
+          <p class="mt-1 text-xs text-slate-500">{{ latest?.cycleName || latest?.cycleCode }}</p>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Change</p>
+          <p class="mt-1 text-2xl font-bold" [ngClass]="deltaClass(latestDelta)">
+            {{ latestDelta === null ? '—' : deltaSymbol(latestDelta) }}
+          </p>
+          <!-- Spelled out for screen readers: "+8" alone does not say +8 of what. -->
+          <p class="mt-1 text-xs text-slate-500">{{ deltaLabel(latestDelta, ' percentage points') }}</p>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Average</p>
+          <p class="mt-1 text-2xl font-bold text-slate-900">{{ averagePercentage === null ? 'Not scored' : averagePercentage + '%' }}</p>
+          <p class="mt-1 text-xs text-slate-500">Across {{ points.length }} scored cycle{{ points.length === 1 ? '' : 's' }}</p>
+        </div>
+
+        <div class="rounded-xl border border-slate-200 bg-white p-4">
+          <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Best cycle</p>
+          <p class="mt-1 text-2xl font-bold text-emerald-600">{{ bestPoint ? bestPoint.percentage + '%' : 'Not scored' }}</p>
+          <p class="mt-1 text-xs text-slate-500">{{ bestPoint?.cycleName }}</p>
+        </div>
+      </div>
+
+      <!-- Trend chart -->
+      <div class="rounded-xl border border-slate-200 bg-white p-4">
+        <div class="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 class="text-base font-semibold text-slate-900">Score trend</h2>
+          <p class="text-xs text-slate-500">Overall score as a percentage of the maximum, oldest cycle first.</p>
+        </div>
+
+        <p *ngIf="!hasTrend" class="mt-4 text-sm text-slate-500">
+          A trend line needs at least two scored cycles. Your first one is shown in the table below.
+        </p>
+
+        <!--
+          Inline SVG rather than a canvas: the shapes stay in the accessibility
+          tree, and the table underneath carries the same numbers for anyone
+          who cannot read the picture.
+        -->
+        <svg *ngIf="hasTrend"
+          class="mt-4 w-full h-auto"
+          [attr.viewBox]="'0 0 ' + chartWidth + ' ' + chartHeight"
+          role="img"
+          [attr.aria-label]="'Score trend across ' + points.length + ' review cycles, from '
+            + points[0].percentage + ' percent to ' + points[points.length - 1].percentage + ' percent.'">
+
+          <!-- Gridlines and y-axis labels -->
+          <g>
+            <ng-container *ngFor="let level of gridLines">
+              <line [attr.x1]="axisLeft" [attr.x2]="axisRight"
+                [attr.y1]="gridY(level)" [attr.y2]="gridY(level)"
+                stroke="#e2e8f0" stroke-width="1" />
+              <text [attr.x]="axisLeft - 10" [attr.y]="gridY(level) + 4"
+                text-anchor="end" font-size="11" fill="#94a3b8">{{ level }}%</text>
+            </ng-container>
+          </g>
+
+          <!-- Trend line -->
+          <polyline [attr.points]="linePath"
+            fill="none" stroke="#e20074" stroke-width="2.5"
+            stroke-linejoin="round" stroke-linecap="round" />
+
+          <!-- Points and x-axis labels -->
+          <g *ngFor="let point of points; trackBy: trackByCycle">
+            <circle [attr.cx]="point.x" [attr.cy]="point.y" r="5"
+              fill="#ffffff" stroke="#e20074" stroke-width="2.5" />
+            <title>{{ point.cycleName }}: {{ point.percentage }}%</title>
+            <text [attr.x]="point.x" [attr.y]="axisBottom + 20"
+              text-anchor="middle" font-size="11" fill="#64748b">{{ point.cycleCode }}</text>
+          </g>
+        </svg>
+      </div>
+
+      <!-- Cycle-by-cycle table: the chart's text equivalent, and useful on its own. -->
+      <div class="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <h2 class="px-4 pt-4 text-base font-semibold text-slate-900">Cycle by cycle</h2>
+        <div class="mt-3 overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <caption class="sr-only">
+              Your published scorecard for each review cycle, oldest first, with the
+              change in percentage points against the preceding cycle.
+            </caption>
+            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th scope="col" class="px-4 py-2 text-left font-semibold">Cycle</th>
+                <th scope="col" class="px-4 py-2 text-right font-semibold">Score</th>
+                <th scope="col" class="px-4 py-2 text-right font-semibold">Percentage</th>
+                <th scope="col" class="px-4 py-2 text-right font-semibold">Change</th>
+                <th scope="col" class="px-4 py-2 text-left font-semibold">Calibration notes</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr *ngFor="let card of history; trackBy: trackByScorecard">
+                <th scope="row" class="px-4 py-2 text-left font-medium text-slate-900">
+                  {{ card.cycleName || card.cycleCode }}
+                  <span class="block text-xs font-normal text-slate-500">{{ card.cycleCode }}</span>
+                </th>
+                <td class="px-4 py-2 text-right text-slate-700">
+                  {{ card.overallScore === null ? '—' : card.overallScore }}
+                  <span *ngIf="card.maxScore" class="text-slate-400">/ {{ card.maxScore }}</span>
+                </td>
+                <td class="px-4 py-2 text-right font-semibold" [ngClass]="scoreClass(card.scorePercentage)">
+                  {{ card.scorePercentage === null ? 'Not scored' : card.scorePercentage + '%' }}
+                </td>
+                <td class="px-4 py-2 text-right">
+                  <span [ngClass]="deltaClass(deltaFor(card))">{{ deltaFor(card) === null ? '—' : deltaSymbol(deltaFor(card)) }}</span>
+                </td>
+                <td class="px-4 py-2 text-slate-600">{{ card.calibrationNotes || '—' }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Category breakdown for the most recent cycle -->
+      <div *ngIf="categoryRows.length" class="rounded-xl border border-slate-200 bg-white overflow-hidden">
+        <div class="px-4 pt-4">
+          <h2 class="text-base font-semibold text-slate-900">Category breakdown</h2>
+          <p class="mt-1 text-xs text-slate-500">
+            {{ latest?.cycleName || latest?.cycleCode }}<span *ngIf="previous">, compared with {{ previous.cycleName || previous.cycleCode }}</span>.
+          </p>
+        </div>
+        <div class="mt-3 overflow-x-auto">
+          <table class="min-w-full text-sm">
+            <caption class="sr-only">Weighted score by KPI category for your most recent published cycle.</caption>
+            <thead class="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th scope="col" class="px-4 py-2 text-left font-semibold">Category</th>
+                <th scope="col" class="px-4 py-2 text-right font-semibold">Score</th>
+                <th scope="col" class="px-4 py-2 text-right font-semibold">Previous</th>
+                <th scope="col" class="px-4 py-2 text-right font-semibold">Change</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr *ngFor="let row of categoryRows; trackBy: trackByCategory">
+                <th scope="row" class="px-4 py-2 text-left font-medium text-slate-900">{{ row.name }}</th>
+                <td class="px-4 py-2 text-right text-slate-700">{{ row.score }}</td>
+                <td class="px-4 py-2 text-right text-slate-500">{{ row.previous === null ? 'New' : row.previous }}</td>
+                <td class="px-4 py-2 text-right">
+                  <span [ngClass]="deltaClass(row.delta)">{{ row.delta === null ? '—' : deltaSymbol(row.delta) }}</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </ng-container>
+  </ng-container>
+</section>

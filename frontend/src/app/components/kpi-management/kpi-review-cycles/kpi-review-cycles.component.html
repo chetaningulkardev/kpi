@@ -1,0 +1,243 @@
+<section class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+
+  <!-- Page Header -->
+  <div class="flex items-start justify-between">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-dt-700">KPI Management</p>
+      <h1 class="mt-1 text-2xl font-bold text-slate-900">Review Cycles</h1>
+      <p class="mt-1 text-sm text-slate-500">
+        Define review periods (e.g. Q1 2027) that group KPI assessments.
+      </p>
+    </div>
+    <button (click)="openCreate()"
+      class="mt-1 bg-dt-600 hover:bg-dt-700 text-white px-4 py-2 rounded-lg text-sm font-semibold shadow transition">
+      + Add Review Cycle
+    </button>
+  </div>
+
+  <!-- Status legend -->
+  <div class="flex flex-wrap gap-2 text-xs">
+    <span class="rounded-full px-2.5 py-0.5 font-medium bg-slate-100 text-slate-600 border border-slate-300">DRAFT – being set up</span>
+    <span class="rounded-full px-2.5 py-0.5 font-medium bg-green-100 text-green-700 border border-green-300">OPEN – KPIs can be generated</span>
+    <span class="rounded-full px-2.5 py-0.5 font-medium bg-blue-100 text-blue-700 border border-blue-300">IN_PROGRESS – self-assessment open</span>
+    <span class="rounded-full px-2.5 py-0.5 font-medium bg-amber-100 text-amber-700 border border-amber-300">UNDER_REVIEW – manager reviewing</span>
+    <span class="rounded-full px-2.5 py-0.5 font-medium bg-orange-100 text-orange-700 border border-orange-300">CALIBRATION – calibration phase</span>
+    <span class="rounded-full px-2.5 py-0.5 font-medium bg-rose-100 text-rose-700 border border-rose-300">CLOSED – cycle complete</span>
+  </div>
+
+  <!-- Page-level flash message -->
+  <div *ngIf="pageMsg" class="rounded-lg px-4 py-3 text-sm font-medium border"
+    [class.bg-green-50]="!pageMsgIsError" [class.text-green-800]="!pageMsgIsError" [class.border-green-300]="!pageMsgIsError"
+    [class.bg-rose-50]="pageMsgIsError"   [class.text-rose-800]="pageMsgIsError"   [class.border-rose-300]="pageMsgIsError">
+    {{ pageMsg }}
+  </div>
+
+  <!-- Loading -->
+  <p *ngIf="loadError" role="alert" class="my-3 text-sm text-rose-800">{{ loadError }} <button (click)="load()" class="underline">Retry</button></p>
+  <div *ngIf="loading" class="text-center text-slate-500 py-12">
+    <span class="inline-block animate-pulse">Loading review cycles...</span>
+  </div>
+
+  <!-- Table -->
+  <div *ngIf="!loading" class="bg-white rounded-xl shadow overflow-x-auto">
+    <table class="min-w-full text-sm" *ngIf="cycles.length > 0">
+      <thead class="bg-slate-50 border-b border-slate-200">
+        <tr class="text-left text-xs uppercase text-slate-500 tracking-wide">
+          <th class="px-4 py-3">Code</th>
+          <th class="px-4 py-3">Name</th>
+          <th class="px-4 py-3">Start Date</th>
+          <th class="px-4 py-3">End Date</th>
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3 text-center">KPIs Generated</th>
+          <th class="px-4 py-3 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr *ngFor="let cycle of cycles" class="hover:bg-dt-50 transition-colors">
+          <td class="px-4 py-3 font-mono text-xs text-slate-600 font-semibold">{{ cycle.code }}</td>
+          <td class="px-4 py-3 font-medium text-slate-900">{{ cycle.name }}</td>
+          <td class="px-4 py-3 text-slate-500 text-xs">{{ cycle.startDate }}</td>
+          <td class="px-4 py-3 text-slate-500 text-xs">{{ cycle.endDate }}</td>
+          <td class="px-4 py-3">
+            <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" [class]="statusClass(cycle.statusCode)">
+              {{ cycle.statusCode }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-center">
+            <span *ngIf="cycle.kpisGenerated"  class="text-green-600 font-semibold text-xs">✅ Yes</span>
+            <span *ngIf="!cycle.kpisGenerated" class="text-slate-400 text-xs">— No</span>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <div class="flex justify-end gap-4 flex-wrap">
+              <button class="text-emerald-700 hover:text-emerald-900 text-xs font-semibold transition disabled:opacity-40"
+                [disabled]="actingId === cycle.id || !canOpen(cycle)" (click)="openCycle(cycle)">Open</button>
+              <button class="text-dt-700 hover:text-dt-900 text-xs font-semibold transition disabled:opacity-40"
+                [disabled]="actingId === cycle.id || !canGenerate(cycle)" (click)="generateKpis(cycle)">
+                {{ actingId === cycle.id ? 'Working…' : 'Generate KPIs' }}
+              </button>
+              <button class="text-amber-700 hover:text-amber-900 text-xs font-semibold transition disabled:opacity-40"
+                [disabled]="actingId === cycle.id || !canClose(cycle)" (click)="closeCycle(cycle)">Close</button>
+              <button class="text-sky-700 hover:text-sky-900 text-xs font-semibold transition"
+                [disabled]="!!deletingId || !!actingId" (click)="openEdit(cycle)">Edit</button>
+              <button class="text-rose-600 hover:text-rose-800 text-xs font-semibold transition disabled:opacity-40"
+                [disabled]="deletingId === cycle.id || actingId === cycle.id" (click)="delete(cycle)">
+                {{ deletingId === cycle.id ? 'Deleting…' : 'Delete' }}
+              </button>
+            </div>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div *ngIf="!loadError && cycles.length === 0" class="text-center py-16 text-slate-400">
+      <p class="text-4xl mb-3">📅</p>
+      <p class="font-medium">No review cycles yet.</p>
+      <p class="text-sm mt-1">Click <strong>+ Add Review Cycle</strong> above to create one.</p>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- Modal                                                                     -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showModal"
+  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+  (click)="closeModal()">
+
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+    [appAccessibleModal]="editingId ? 'Edit Review Cycle' : 'Add Review Cycle'"
+    (dismiss)="closeModal()"
+    (click)="$event.stopPropagation()">
+
+    <!-- Modal header -->
+    <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-dt-700">KPI Management</p>
+        <h2 class="text-lg font-bold text-slate-900">
+          {{ editingId ? 'Edit Review Cycle' : 'New Review Cycle' }}
+        </h2>
+      </div>
+      <button type="button" aria-label="Close dialog" (click)="closeModal()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+    </div>
+
+    <!-- Modal body -->
+    <div class="px-6 py-5 space-y-4">
+
+      <!-- Form error / message -->
+      <div *ngIf="formMsg" class="rounded-lg px-4 py-2.5 text-sm font-medium border"
+        [class.bg-rose-50]="formMsgIsError"   [class.text-rose-800]="formMsgIsError"   [class.border-rose-300]="formMsgIsError"
+        [class.bg-green-50]="!formMsgIsError" [class.text-green-800]="!formMsgIsError" [class.border-green-300]="!formMsgIsError">
+        {{ formMsg }}
+      </div>
+
+      <!-- Cycle Name -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">
+          Cycle Name <span class="text-rose-500">*</span>
+        </label>
+        <input [(ngModel)]="form.cycleName"
+          [class.border-rose-400]="formMsgIsError && !form.cycleName.trim()"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none"
+          placeholder="e.g. Q1 2027" />
+      </div>
+
+      <!-- Cycle Code -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">
+          Cycle Code <span class="text-rose-500">*</span>
+          <span *ngIf="editingId" class="ml-1 font-normal text-slate-400">(cannot be changed)</span>
+        </label>
+        <input [(ngModel)]="form.cycleCode"
+          [attr.disabled]="editingId ? '' : null"
+          [class.bg-slate-50]="!!editingId"
+          [class.border-rose-400]="formMsgIsError && !form.cycleCode.trim()"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-dt-400 focus:outline-none"
+          placeholder="e.g. Q1_2027" />
+        <p class="mt-1 text-xs text-slate-400">Uppercase with underscores. Cannot be changed after creation.</p>
+      </div>
+
+      <!-- Status -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+        <select [(ngModel)]="form.status"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none">
+          <option *ngFor="let s of statusOptions" [value]="s">{{ s }}</option>
+        </select>
+      </div>
+
+      <!-- Dates row -->
+      <div class="grid grid-cols-2 gap-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">
+            Start Date <span class="text-rose-500">*</span>
+          </label>
+          <input [(ngModel)]="form.startDate" type="date"
+            [class.border-rose-400]="formMsgIsError && !form.startDate"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none" />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">
+            End Date <span class="text-rose-500">*</span>
+          </label>
+          <input [(ngModel)]="form.endDate" type="date"
+            [class.border-rose-400]="formMsgIsError && !form.endDate"
+            class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none" />
+        </div>
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">
+          Description <span class="text-slate-400 font-normal">(optional)</span>
+        </label>
+        <textarea [(ngModel)]="form.description" rows="2"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none resize-none"
+          placeholder="Brief description of this review period…"></textarea>
+      </div>
+
+    </div>
+
+    <!-- Modal footer -->
+    <div class="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+      <button (click)="closeModal()"
+        class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition">
+        Cancel
+      </button>
+      <button (click)="save()" [disabled]="saving"
+        class="bg-dt-600 hover:bg-dt-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg text-sm font-semibold transition">
+        {{ saving ? '⏳ Saving…' : (editingId ? '💾 Update Cycle' : '➕ Create Cycle') }}
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Action Confirmation Popup -->
+<div *ngIf="confirmPopup.visible"
+  class="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4"
+  (click)="cancelConfirmPopup()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md"
+    [appAccessibleModal]="confirmPopup.title"
+    (dismiss)="cancelConfirmPopup()"
+    (click)="$event.stopPropagation()">
+
+    <div class="px-5 py-4 border-b border-slate-200">
+      <h3 class="text-base font-semibold text-slate-900">{{ confirmPopup.title }}</h3>
+      <p class="mt-1 text-sm text-slate-600">{{ confirmPopup.message }}</p>
+    </div>
+
+    <div class="px-5 py-4 flex justify-end gap-2">
+      <button (click)="cancelConfirmPopup()"
+        class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+        Cancel
+      </button>
+      <button (click)="confirmPopupAction()"
+        [class]="confirmPopup.dangerous
+          ? 'rounded-lg bg-rose-600 hover:bg-rose-700 px-4 py-2 text-sm font-semibold text-white'
+          : 'rounded-lg bg-dt-600 hover:bg-dt-700 px-4 py-2 text-sm font-semibold text-white'">
+        {{ confirmPopup.actionLabel }}
+      </button>
+    </div>
+  </div>
+</div>

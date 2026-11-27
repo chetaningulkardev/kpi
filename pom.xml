@@ -1,0 +1,315 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.0</version>
+        <relativePath/> <!-- lookup parent from repository -->
+    </parent>
+    <groupId>com.example</groupId>
+    <artifactId>KPI</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <name>KPI</name>
+    <description>KPI</description>
+    <url/>
+    <licenses>
+        <license/>
+    </licenses>
+    <developers>
+        <developer/>
+    </developers>
+    <scm>
+        <connection/>
+        <developerConnection/>
+        <tag/>
+        <url/>
+    </scm>
+    <properties>
+        <java.version>26</java.version>
+        <maven.compiler.source>26</maven.compiler.source>
+        <maven.compiler.target>26</maven.compiler.target>
+
+        <!-- CVE remediation: version overrides for dependencies that are otherwise
+             version-managed by spring-boot-starter-parent 4.1.0. Each bump below is a
+             security fix only - no functional/API change is intended.
+
+             postgresql.version   42.7.11 -> 42.7.12
+                 CVE-2026-54291 (HIGH) - pgJDBC silently downgrades
+                 channelBinding=require from SCRAM-SHA-256-PLUS to plain SCRAM-SHA-256
+                 when the server certificate uses a signature algorithm with no
+                 tls-server-end-point binding hash, losing MITM protection.
+
+             log4j2.version       2.25.4 -> 2.25.5
+                 CVE-2026-49844 (MEDIUM) - Log4j API MapMessage.asJson() emits bare
+                 NaN/Infinity tokens for non-finite floats, producing non-RFC-8259 JSON
+                 that can corrupt log records and break downstream log ingestion.
+
+             jackson-2-bom.version  2.21.4 -> 2.21.5
+                 CVE-2026-54515 (MEDIUM) - jackson-databind case-insensitive
+                 deserialization rebuilds the unfiltered BeanPropertyMap and thereby
+                 bypasses per-property @JsonIgnoreProperties exclusions (mass assignment).
+                 NOTE: Boot 4.1.0 manages TWO Jackson BOMs. "jackson-bom.version" is
+                 tools.jackson:jackson-bom (Jackson 3.x, 3.1.4) - setting it to 2.21.5
+                 would be an invalid downgrade. The com.fasterxml 2.x line, which is what
+                 jackson-databind 2.21.4 comes from, is "jackson-2-bom.version".
+                 The remaining databind advisories (GHSA-mhm7-754m-9p8w, CVE-2026-59889)
+                 require @JsonView with @JsonTypeInfo(EXTERNAL_PROPERTY)/@JsonUnwrapped,
+                 none of which are used in src/main/java, so they are not reachable. -->
+        <postgresql.version>42.7.12</postgresql.version>
+        <log4j2.version>2.25.5</log4j2.version>
+        <jackson-2-bom.version>2.21.5</jackson-2-bom.version>
+    </properties>
+    <dependencies>
+        <!-- Spring Web & REST -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Spring Data JPA & Hibernate -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+
+        <!-- Spring Security -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+
+        <!-- JWT (JJWT) -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.3</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.3</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.3</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- PostgreSQL Driver -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Flyway: schema is versioned in src/main/resources/db/migration.             Three artifacts are needed on Boot 4:
+               - spring-boot-flyway carries FlywayAutoConfiguration, which was
+                 split out of spring-boot-autoconfigure and is NOT pulled in
+                 transitively by flyway-core. Without it Flyway is silently
+                 absent and Hibernate hits an empty schema.
+               - flyway-database-postgresql has held the PostgreSQL support
+                 since Flyway 10; flyway-core alone cannot handle a
+                 jdbc:postgresql URL. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-flyway</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <!-- H2 Database (for testing) -->
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Lombok -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.30</version>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- MapStruct -->
+        <dependency>
+            <groupId>org.mapstruct</groupId>
+            <artifactId>mapstruct</artifactId>
+            <version>1.6.3</version>
+        </dependency>
+
+        <!-- Spring Validation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+
+        <!-- Email notifications (deadline reminders, review alerts) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+
+        <!-- Health checks and metrics -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+
+        <!-- Prometheus scrape endpoint. Only exposed under the prod profile,
+             where management.endpoints includes "prometheus". -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- Dev Tools -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-devtools</artifactId>
+            <scope>runtime</scope>
+            <optional>true</optional>
+        </dependency>
+
+        <!-- Testing -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <!-- Frontend Maven Plugin for Angular Build -->
+            <plugin>
+                <groupId>com.github.eirslett</groupId>
+                <artifactId>frontend-maven-plugin</artifactId>
+                <version>1.14.2</version>
+                <configuration>
+                    <nodeVersion>v22.23.4</nodeVersion>
+                    <npmVersion>11.17.0</npmVersion>
+                    <workingDirectory>frontend</workingDirectory>
+                </configuration>
+                <executions>
+                    <execution>
+                        <id>install node and npm</id>
+                        <goals>
+                            <goal>install-node-and-npm</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>npm install</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>install</arguments>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>npm run build</id>
+                        <goals>
+                            <goal>npm</goal>
+                        </goals>
+                        <configuration>
+                            <arguments>run build</arguments>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Copy Angular dist to Spring Boot static folder -->
+            <plugin>
+                <artifactId>maven-resources-plugin</artifactId>
+                <executions>
+                    <execution>
+                        <id>copy-frontend</id>
+                        <phase>process-resources</phase>
+                        <goals>
+                            <goal>copy-resources</goal>
+                        </goals>
+                        <configuration>
+                            <!--
+                              Copy straight into the packaged classes, not back
+                              into src/main/resources/static.
+
+                              Maven's own resource copy runs earlier in this same
+                              phase, so writing the fresh bundle into the source
+                              tree only reached the jar on the *next* build: every
+                              `mvn package && java -jar` served the previous
+                              build's UI, and last-minute frontend fixes silently
+                              did not ship.
+                            -->
+                            <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
+                            <resources>
+                                <resource>
+                                    <directory>${basedir}/frontend/dist/frontend/browser</directory>
+                                </resource>
+                            </resources>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <excludes>
+                        <exclude>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                        </exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>26</source>
+                    <target>26</target>
+                    <annotationProcessorPaths>
+                        <path>
+                            <groupId>org.projectlombok</groupId>
+                            <artifactId>lombok</artifactId>
+                            <version>1.18.46</version>
+                        </path>
+                        <path>
+                            <groupId>org.mapstruct</groupId>
+                            <artifactId>mapstruct-processor</artifactId>
+                            <version>1.6.3</version>
+                        </path>
+                    </annotationProcessorPaths>
+                    <annotationProcessors>
+                        <annotationProcessor>lombok.launch.AnnotationProcessorHider$AnnotationProcessor</annotationProcessor>
+                        <annotationProcessor>org.mapstruct.ap.MappingProcessor</annotationProcessor>
+                    </annotationProcessors>
+                    <compilerArgs>
+                        <arg>-Amapstruct.suppressGeneratorTimestamp=true</arg>
+                        <arg>-Amapstruct.suppressGeneratorVersionInfoComment=true</arg>
+                    </compilerArgs>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

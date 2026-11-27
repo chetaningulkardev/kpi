@@ -1,0 +1,370 @@
+<section class="space-y-6">
+
+  <!-- Header -->
+  <header class="panel p-6">
+    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-dt-700">KPI Management</p>
+    <h2 class="mt-1 text-2xl font-bold text-slate-900">Generate KPI Assignments</h2>
+    <p class="mt-2 text-sm text-slate-600">
+      Create individual KPI records for employees based on role templates and review cycles.
+    </p>
+  </header>
+
+  <!-- Flash result -->
+  <div *ngIf="lastResult"
+    [class]="lastResult.success
+      ? 'panel px-5 py-4 border-l-4 border-emerald-500 bg-emerald-50 text-emerald-800'
+      : 'panel px-5 py-4 border-l-4 border-rose-500 bg-rose-50 text-rose-800'"
+    class="text-sm font-medium flex items-start gap-3">
+    <span class="text-lg leading-none">{{ lastResult.success ? '✅' : '❌' }}</span>
+    <span>{{ lastResult.message }}</span>
+  </div>
+
+  <!-- Summary cards -->
+  <div *ngIf="!loadingStats" class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div class="panel p-4 text-center">
+      <p class="text-2xl font-bold text-dt-700">{{ totalActiveUsers }}</p>
+      <p class="text-xs text-slate-500 mt-1 uppercase tracking-wide">Active Users</p>
+    </div>
+    <div class="panel p-4 text-center">
+      <p class="text-2xl font-bold text-dt-700">{{ rolesWithActiveTemplate }}</p>
+      <p class="text-xs text-slate-500 mt-1 uppercase tracking-wide">Roles with Template</p>
+    </div>
+    <div class="panel p-4 text-center">
+      <p class="text-2xl font-bold text-dt-700">{{ readyRoles.length }}</p>
+      <p class="text-xs text-slate-500 mt-1 uppercase tracking-wide">Ready to Generate</p>
+    </div>
+    <div class="panel p-4 text-center">
+      <p class="text-2xl font-bold text-dt-700">{{ eligibleCycles.length }}</p>
+      <p class="text-xs text-slate-500 mt-1 uppercase tracking-wide">Open Cycles</p>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="panel overflow-hidden">
+    <div class="flex border-b border-slate-200 bg-slate-50">
+      <button (click)="activeTab='overview'"
+        [class]="activeTab==='overview' ? 'border-b-2 border-dt-600 text-dt-700 bg-white' : 'text-slate-500 hover:text-slate-700'"
+        class="px-6 py-3 text-sm font-semibold transition">
+        📋 Cycle Overview
+      </button>
+      <button (click)="activeTab='byRole'"
+        [class]="activeTab==='byRole' ? 'border-b-2 border-dt-600 text-dt-700 bg-white' : 'text-slate-500 hover:text-slate-700'"
+        class="px-6 py-3 text-sm font-semibold transition">
+        🎯 Generate by Role
+      </button>
+      <button (click)="activeTab='preview'; loadPreview()"
+        [class]="activeTab==='preview' ? 'border-b-2 border-dt-600 text-dt-700 bg-white' : 'text-slate-500 hover:text-slate-700'"
+        class="px-6 py-3 text-sm font-semibold transition">
+        🔍 Preview
+      </button>
+    </div>
+
+    <!-- ── TAB: CYCLE OVERVIEW ──────────────────────────────────────── -->
+    <div *ngIf="activeTab==='overview'" class="p-6">
+      <div *ngIf="loadingStats" class="text-center text-slate-400 py-10">Loading...</div>
+
+      <div *ngIf="!loadingStats">
+        <h3 class="text-sm font-semibold uppercase tracking-wide text-dt-700 mb-4">Review Cycles</h3>
+
+        <div *ngIf="cycleStats.length === 0" class="text-sm text-slate-500 py-4">
+          No review cycles found. Create one under <strong>Review Cycles</strong> first.
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table *ngIf="cycleStats.length" class="min-w-full text-sm">
+            <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-4 py-3 text-left">Cycle</th>
+                <th class="px-4 py-3 text-left">Dates</th>
+                <th class="px-4 py-3 text-center">Status</th>
+                <th class="px-4 py-3 text-center">KPIs Generated</th>
+                <th class="px-4 py-3 text-center">KPI Records</th>
+                <th class="px-4 py-3 text-center">Action</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr *ngFor="let cycle of cycleStats" class="hover:bg-slate-50">
+                <td class="px-4 py-3">
+                  <p class="font-semibold text-slate-900">{{ cycle.cycleName }}</p>
+                  <p class="text-xs text-slate-400 font-mono">{{ cycle.cycleCode }}</p>
+                </td>
+                <td class="px-4 py-3 text-slate-600 text-xs">
+                  {{ cycle.startDate | date:'mediumDate' }} → {{ cycle.endDate | date:'mediumDate' }}
+                </td>
+                <td class="px-4 py-3 text-center">
+                  <span [class]="statusClass(cycle.status)" class="inline-block rounded-full border px-2.5 py-0.5 text-xs font-semibold">
+                    {{ cycle.status }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-center">
+                  <span *ngIf="cycle.kpisGenerated" class="inline-flex items-center gap-1 text-emerald-600 text-xs font-semibold">
+                    <span>✅</span> Yes
+                  </span>
+                  <span *ngIf="!cycle.kpisGenerated" class="text-slate-400 text-xs">No</span>
+                </td>
+                <td class="px-4 py-3 text-center font-semibold text-slate-800">
+                  {{ cycle.kpiCount }}
+                </td>
+                <td class="px-4 py-3 text-center">
+                  <button *ngIf="canGenerate(cycle)"
+                    (click)="generateForCycle(cycle)"
+                    [disabled]="generatingCycleId === cycle.cycleId"
+                    class="rounded-lg bg-dt-600 hover:bg-dt-700 disabled:opacity-50 px-4 py-1.5 text-xs font-semibold text-white transition">
+                    {{ generatingCycleId === cycle.cycleId ? '⏳ Generating…' : '⚡ Generate All' }}
+                  </button>
+                  <span *ngIf="cycle.kpisGenerated" class="text-xs text-emerald-600 font-medium">Generated</span>
+                  <span *ngIf="!canGenerate(cycle) && !cycle.kpisGenerated" class="text-xs text-slate-400">
+                    {{ cycle.status === 'DRAFT' ? 'Open cycle first' : 'Cycle closed' }}
+                  </span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Role readiness summary -->
+        <div class="mt-8">
+          <h3 class="text-sm font-semibold uppercase tracking-wide text-dt-700 mb-3">Role Template Readiness</h3>
+          <div class="overflow-x-auto rounded-xl border border-slate-200">
+            <table class="min-w-full text-sm">
+              <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                <tr>
+                  <th class="px-4 py-3 text-left">Role</th>
+                  <th class="px-4 py-3 text-center">Users</th>
+                  <th class="px-4 py-3 text-center">Templates</th>
+                  <th class="px-4 py-3 text-center">Active Templates</th>
+                  <th class="px-4 py-3 text-left">Template Names</th>
+                  <th class="px-4 py-3 text-center">Ready?</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                <tr *ngFor="let rs of roleStats" class="hover:bg-slate-50">
+                  <td class="px-4 py-3">
+                    <p class="font-semibold text-slate-900">{{ rs.roleName }}</p>
+                    <p class="text-xs font-mono text-slate-400">{{ rs.roleCode }}</p>
+                  </td>
+                  <td class="px-4 py-3 text-center font-semibold">{{ rs.userCount }}</td>
+                  <td class="px-4 py-3 text-center">{{ rs.totalTemplates }}</td>
+                  <td class="px-4 py-3 text-center">
+                    <span [class]="rs.activeTemplates > 0 ? 'text-emerald-600 font-bold' : 'text-slate-400'">
+                      {{ rs.activeTemplates }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-xs text-slate-600 max-w-xs">
+                    <span *ngFor="let name of rs.templateNames; let last = last">
+                      {{ name }}<span *ngIf="!last">, </span>
+                    </span>
+                    <span *ngIf="rs.templateNames.length === 0" class="text-slate-300 italic">none</span>
+                  </td>
+                  <td class="px-4 py-3 text-center">
+                    <span *ngIf="rs.readyToGenerate" class="text-emerald-600 font-bold text-lg">✓</span>
+                    <span *ngIf="!rs.readyToGenerate" class="text-slate-300 text-lg">–</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── TAB: GENERATE BY ROLE ────────────────────────────────────── -->
+    <div *ngIf="activeTab==='byRole'" class="p-6">
+      <h3 class="text-sm font-semibold uppercase tracking-wide text-dt-700 mb-5">Generate KPIs for a Specific Role</h3>
+      <p class="text-sm text-slate-600 mb-6">
+        Use this to generate KPI records only for users of a selected role in the chosen cycle.
+        Useful for targeted re-runs or when a new role's template was activated after a full cycle generation.
+      </p>
+
+      <div class="flex flex-wrap gap-4 items-end mb-6">
+        <label class="flex flex-col gap-1 min-w-[220px]">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Role</span>
+          <select [(ngModel)]="selectedRoleCode" (ngModelChange)="onRoleOrCycleChange()"
+            class="rounded-lg border border-dt-200 bg-white px-3 py-2 text-sm outline-none ring-dt-300 focus:ring">
+            <option value="">— Select role —</option>
+            <option *ngFor="let r of roles" [value]="r.roleCode">{{ r.roleName }} ({{ r.roleCode }})</option>
+          </select>
+        </label>
+
+        <label class="flex flex-col gap-1 min-w-[220px]">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Review Cycle</span>
+          <select [(ngModel)]="selectedCycleCode" (ngModelChange)="onRoleOrCycleChange()"
+            class="rounded-lg border border-dt-200 bg-white px-3 py-2 text-sm outline-none ring-dt-300 focus:ring">
+            <option value="">— Select cycle —</option>
+            <option *ngFor="let c of cycles" [value]="c.code">{{ c.name }} ({{ c.statusCode }})</option>
+          </select>
+        </label>
+
+        <button (click)="refreshRoleReadiness()" [disabled]="checkingReadiness || !selectedRoleCode || !selectedCycleCode"
+          class="rounded-lg border border-dt-300 hover:bg-dt-50 disabled:opacity-50 px-4 py-2 text-sm font-semibold text-dt-700 transition">
+          {{ checkingReadiness ? 'Checking...' : 'Check Readiness' }}
+        </button>
+
+        <button (click)="generateByRole()" [disabled]="generating || !selectedRoleCode || !selectedCycleCode"
+          [title]="!selectedRoleCode || !selectedCycleCode ? 'Select role and review cycle first' : ''"
+          class="rounded-lg bg-dt-600 hover:bg-dt-700 disabled:opacity-50 px-6 py-2 text-sm font-semibold text-white shadow-sm transition">
+          {{ generating ? '⏳ Generating…' : '⚡ Generate' }}
+        </button>
+      </div>
+
+      <!-- Role readiness mini-card -->
+      <div *ngIf="selectedRoleCode" class="rounded-xl border border-dt-200 bg-dt-50 p-4 text-sm max-w-lg">
+        <ng-container *ngFor="let rs of roleStats">
+          <ng-container *ngIf="rs.roleCode === selectedRoleCode">
+            <div class="flex items-center justify-between mb-2">
+              <span class="font-semibold text-dt-800">{{ rs.roleName }}</span>
+              <span [class]="rs.readyToGenerate ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'"
+                class="rounded-full px-2.5 py-0.5 text-xs font-semibold border">
+                {{ rs.readyToGenerate ? '✓ Ready' : '⚠ Not Ready' }}
+              </span>
+            </div>
+            <div class="text-dt-700 text-xs space-y-0.5">
+              <p>Users: <strong>{{ rs.userCount }}</strong></p>
+              <p>Active templates: <strong>{{ rs.activeTemplates }}</strong>
+                <span *ngIf="rs.activeTemplates === 0" class="text-rose-500 ml-1">— Activate a template first</span>
+              </p>
+              <p *ngIf="rs.templateNames.length">Templates: {{ rs.templateNames.join(', ') }}</p>
+            </div>
+          </ng-container>
+        </ng-container>
+      </div>
+
+      <div *ngIf="roleReadiness" class="mt-4 rounded-xl border p-4 text-sm"
+        [ngClass]="roleReadiness.ready ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'">
+        <div class="flex items-center justify-between">
+          <p class="font-semibold" [ngClass]="roleReadiness.ready ? 'text-emerald-700' : 'text-amber-700'">
+            {{ roleReadiness.ready ? 'Ready to generate' : 'Not ready yet' }}
+          </p>
+          <span class="text-xs" [ngClass]="roleReadiness.ready ? 'text-emerald-700' : 'text-amber-700'">
+            Active users in role: {{ roleReadiness.activeUsersInRole }}
+          </span>
+        </div>
+        <p *ngIf="!roleReadiness.cycleEligible" class="mt-2 text-xs text-amber-700">Cycle must be OPEN or IN_PROGRESS.</p>
+        <ul *ngIf="!roleReadiness.ready && roleReadiness.reasons.length" class="mt-2 list-disc list-inside text-xs text-amber-700 space-y-1">
+          <li *ngFor="let r of roleReadiness.reasons">{{ r }}</li>
+        </ul>
+      </div>
+
+      <!-- Info box -->
+      <div class="mt-6 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <p class="font-semibold mb-1">⚠️ Before generating:</p>
+        <ul class="list-disc list-inside space-y-1 text-xs">
+          <li>The role must have an <strong>ACTIVE</strong> template with KPI items and 100% total weight.</li>
+          <li>The review cycle must have status <strong>OPEN</strong> or <strong>IN_PROGRESS</strong>.</li>
+          <li>Re-running generation is safe — existing KPI records won't be duplicated.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ── TAB: PREVIEW ─────────────────────────────────────────────── -->
+    <div *ngIf="activeTab==='preview'" class="p-6">
+      <div class="flex flex-wrap gap-4 items-end mb-6">
+        <label class="flex flex-col gap-1 min-w-[240px]">
+          <span class="text-xs font-semibold uppercase tracking-wide text-slate-500">Select Cycle to Preview</span>
+          <select [(ngModel)]="selectedPreviewCycle"
+            class="rounded-lg border border-dt-200 bg-white px-3 py-2 text-sm outline-none ring-dt-300 focus:ring">
+            <option value="">— Select cycle —</option>
+            <option *ngFor="let c of cycles" [value]="c.code">{{ c.name }} ({{ c.statusCode }})</option>
+          </select>
+        </label>
+        <button (click)="loadPreview()" [disabled]="previewing"
+          class="rounded-lg border border-dt-300 hover:bg-dt-50 disabled:opacity-50 px-5 py-2 text-sm font-semibold text-dt-700 transition">
+          {{ previewing ? '⏳ Loading…' : '🔍 Load Preview' }}
+        </button>
+      </div>
+
+      <div *ngIf="previewing" class="text-center text-slate-400 py-10">Loading preview data...</div>
+
+      <div *ngIf="previewData && !previewing">
+        <!-- Summary pills -->
+        <div class="flex flex-wrap gap-3 mb-6">
+          <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-center min-w-[110px]">
+            <p class="text-2xl font-bold text-emerald-600">{{ previewData.willGenerate }}</p>
+            <p class="text-xs text-emerald-700 font-semibold mt-0.5">Will Generate</p>
+          </div>
+          <div class="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-center min-w-[110px]">
+            <p class="text-2xl font-bold text-blue-600">{{ previewData.alreadyGenerated }}</p>
+            <p class="text-xs text-blue-700 font-semibold mt-0.5">Already Generated</p>
+          </div>
+          <div class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center min-w-[110px]">
+            <p class="text-2xl font-bold text-amber-600">{{ previewData.noTemplate }}</p>
+            <p class="text-xs text-amber-700 font-semibold mt-0.5">No Template</p>
+          </div>
+          <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center min-w-[110px]">
+            <p class="text-2xl font-bold text-slate-600">{{ previewData.totalUsers }}</p>
+            <p class="text-xs text-slate-600 font-semibold mt-0.5">Total Users</p>
+          </div>
+        </div>
+
+        <!-- User table -->
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="min-w-full text-sm">
+            <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <tr>
+                <th class="px-4 py-3 text-left">Employee</th>
+                <th class="px-4 py-3 text-left">Roles</th>
+                <th class="px-4 py-3 text-center">Template?</th>
+                <th class="px-4 py-3 text-center">Existing KPIs</th>
+                <th class="px-4 py-3 text-center">Will Generate?</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100">
+              <tr *ngFor="let u of previewData.users"
+                [class]="u.willGenerate ? 'hover:bg-emerald-50 bg-white' : 'hover:bg-slate-50 bg-white'">
+                <td class="px-4 py-3">
+                  <p class="font-semibold text-slate-900">{{ u.name }}</p>
+                  <p class="text-xs text-slate-400">{{ u.email }}</p>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex flex-wrap gap-1">
+                    <span *ngFor="let role of u.roles"
+                      class="rounded-full bg-dt-100 text-dt-700 border border-dt-200 px-2 py-0.5 text-xs font-medium">
+                      {{ role }}
+                    </span>
+                  </div>
+                </td>
+                <td class="px-4 py-3 text-center">
+                  <span *ngIf="u.hasTemplate" class="text-emerald-600 font-bold">✓</span>
+                  <span *ngIf="!u.hasTemplate" class="text-amber-500 font-bold">–</span>
+                </td>
+                <td class="px-4 py-3 text-center font-semibold">
+                  <span [class]="u.existingKpiCount > 0 ? 'text-blue-600' : 'text-slate-400'">
+                    {{ u.existingKpiCount }}
+                  </span>
+                </td>
+                <td class="px-4 py-3 text-center">
+                  <span *ngIf="u.willGenerate" class="rounded-full bg-emerald-100 text-emerald-700 border border-emerald-300 px-2.5 py-0.5 text-xs font-semibold">Yes</span>
+                  <span *ngIf="!u.willGenerate && u.existingKpiCount > 0" class="rounded-full bg-blue-100 text-blue-700 border border-blue-300 px-2.5 py-0.5 text-xs font-semibold">Already done</span>
+                  <span *ngIf="!u.willGenerate && !u.hasTemplate" class="text-amber-500 text-xs">No template</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confirm Popup -->
+  <div *ngIf="confirmPopup.visible"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+    <div class="bg-white rounded-2xl shadow-2xl border border-slate-200 p-6 w-full max-w-md mx-4"
+      [appAccessibleModal]="confirmPopup.title"
+      (dismiss)="cancelConfirmPopup()">
+      <h3 class="text-lg font-bold text-slate-900 mb-2">{{ confirmPopup.title }}</h3>
+      <p class="text-sm text-slate-600 mb-6">{{ confirmPopup.message }}</p>
+      <div class="flex justify-end gap-3">
+        <button (click)="cancelConfirmPopup()"
+          class="rounded-lg border border-slate-300 px-5 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 transition">
+          Cancel
+        </button>
+        <button (click)="confirmPopupAction()"
+          [class]="confirmPopup.dangerous ? 'bg-rose-600 hover:bg-rose-700' : 'bg-dt-600 hover:bg-dt-700'"
+          class="rounded-lg px-5 py-2 text-sm font-semibold text-white shadow-sm transition">
+          {{ confirmPopup.actionLabel }}
+        </button>
+      </div>
+    </div>
+  </div>
+
+</section>

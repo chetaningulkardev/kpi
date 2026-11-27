@@ -1,0 +1,211 @@
+<section class="space-y-6">
+  <header class="panel p-6">
+    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-dt-700">KPI Management</p>
+    <h2 class="mt-1 text-2xl font-bold text-slate-900">KPI Masters</h2>
+    <p class="mt-2 text-sm text-slate-600">Define the canonical KPI definitions — the building blocks used in templates and assignments.</p>
+    <div class="mt-4">
+      <button (click)="openCreate()"
+        class="rounded-lg bg-dt-600 hover:bg-dt-700 px-4 py-2 text-sm font-semibold text-white shadow-sm transition">
+        + Add KPI Master
+      </button>
+    </div>
+  </header>
+
+  <p *ngIf="pageMsg"
+    class="rounded-lg border px-3 py-2 text-sm"
+    [class.bg-green-50]="!pageMsgIsError"
+    [class.border-green-200]="!pageMsgIsError"
+    [class.text-green-700]="!pageMsgIsError"
+    [class.bg-rose-50]="pageMsgIsError"
+    [class.border-rose-200]="pageMsgIsError"
+    [class.text-rose-700]="pageMsgIsError">
+    {{ pageMsg }}
+  </p>
+
+  <!-- Table -->
+  <section class="panel p-6">
+    <h3 class="text-sm font-semibold uppercase tracking-wide text-dt-700 mb-4">All KPI Masters</h3>
+    <div class="mb-4 grid gap-3 md:grid-cols-4">
+      <input
+        [(ngModel)]="searchTerm"
+        placeholder="Search by code, name, category, role"
+        class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm"
+      />
+      <select [(ngModel)]="roleFilterId" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+        <option value="ALL">All Roles</option>
+        <option *ngFor="let role of roles" [ngValue]="role.id">{{ role.roleCode }} - {{ role.roleName }}</option>
+      </select>
+      <select [(ngModel)]="categoryFilterId" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+        <option value="ALL">All Categories</option>
+        <option *ngFor="let cat of categories" [ngValue]="cat.id">{{ cat.categoryName }}</option>
+      </select>
+      <div class="flex gap-2">
+        <select [(ngModel)]="activeFilter" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+          <option value="ALL">All Status</option>
+          <option value="ACTIVE">Active</option>
+          <option value="INACTIVE">Inactive</option>
+        </select>
+        <button (click)="clearFilters()" class="rounded-lg border border-slate-300 px-3 py-2 text-xs text-slate-600 hover:bg-slate-50">Reset</button>
+      </div>
+    </div>
+    <p class="mb-3 text-xs text-slate-500">Showing {{ filteredMasters.length }} of {{ masters.length }} KPI masters</p>
+    <p *ngIf="loadError" role="alert" class="my-3 text-sm text-rose-800">{{ loadError }} <button (click)="load()" class="underline">Retry</button></p>
+    <div *ngIf="loading" class="text-center text-slate-500 py-6">Loading...</div>
+    <div *ngIf="!loading" class="overflow-x-auto">
+      <table class="min-w-full text-sm">
+        <thead>
+          <tr class="border-b border-slate-200 text-left text-xs uppercase text-slate-500">
+            <th class="py-2 pr-4">Code</th>
+            <th class="py-2 pr-4">Name</th>
+            <th class="py-2 pr-4">Category</th>
+            <th class="py-2 pr-4">Roles</th>
+            <th class="py-2 pr-4">Type</th>
+            <th class="py-2 pr-4">Weight</th>
+            <th class="py-2 pr-4">Active</th>
+            <th class="py-2">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let master of filteredMasters" class="border-b border-slate-100 hover:bg-slate-50">
+            <td class="py-2 pr-4 font-mono text-xs text-slate-600">{{ master.kpiCode }}</td>
+            <td class="py-2 pr-4 font-medium">{{ master.kpiName }}</td>
+            <td class="py-2 pr-4 text-slate-500">{{ master.categoryName }}</td>
+            <td class="py-2 pr-4 text-slate-500">
+              <span *ngIf="(master.roleNames?.length ?? 0) === 0" class="text-xs text-slate-400">Unmapped</span>
+              <span *ngFor="let role of (master.roleCodes ?? [])" class="mr-1 inline-block rounded-full bg-dt-50 px-2 py-0.5 text-xs text-dt-700">{{ role }}</span>
+            </td>
+            <td class="py-2 pr-4 text-slate-500">{{ master.kpiType }}</td>
+            <td class="py-2 pr-4">{{ master.defaultWeight }}%</td>
+            <td class="py-2 pr-4">
+              <span class="rounded-full px-2 py-0.5 text-xs font-semibold"
+                [class.bg-green-100]="!!master.active"
+                [class.text-green-700]="!!master.active"
+                [class.bg-red-100]="!master.active"
+                [class.text-red-700]="!master.active">
+                {{ master.active ? 'Yes' : 'No' }}
+              </span>
+            </td>
+            <td class="py-2 flex gap-3">
+              <button class="text-sky-700 hover:text-sky-900 text-xs font-medium" (click)="openEdit(master)">Edit</button>
+              <button class="text-rose-700 hover:text-rose-900 text-xs font-medium disabled:opacity-50"
+                [disabled]="deletingId === master.id" (click)="delete(master)">
+                {{ deletingId === master.id ? 'Deleting...' : 'Delete' }}
+              </button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p *ngIf="!loadError && filteredMasters.length === 0" class="mt-4 text-xs text-slate-400">No KPI masters match current filters. Clear filters or use Add KPI Master to create one.</p>
+    </div>
+  </section>
+</section>
+
+<!-- Add/Edit Modal -->
+<div *ngIf="showModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" (click)="closeModal()">
+  <div class="w-full max-w-5xl rounded-xl bg-white shadow-2xl" [appAccessibleModal]="editingId ? 'Edit KPI Master' : 'Add KPI Master'" (dismiss)="closeModal()" (click)="$event.stopPropagation()">
+    <div class="flex items-center justify-between border-b px-5 py-4">
+      <h3 class="text-lg font-semibold text-slate-900">{{ editingId ? 'Edit KPI Master' : 'Add KPI Master' }}</h3>
+      <button type="button" aria-label="Close dialog" (click)="closeModal()" class="text-slate-400 hover:text-slate-600 text-xl">&times;</button>
+    </div>
+
+    <div class="space-y-4 px-5 py-4 max-h-[70vh] overflow-y-auto">
+      <p *ngIf="formMsg" class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">{{ formMsg }}</p>
+
+      <div class="grid gap-3 md:grid-cols-4">
+        <div>
+          <label for="kpi-master-name" class="mb-1 block text-xs font-medium text-slate-500">KPI Name *</label>
+          <input id="kpi-master-name" [(ngModel)]="form.kpiName" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm" placeholder="e.g. On Time Delivery" />
+        </div>
+        <div>
+          <label for="kpi-master-code" class="mb-1 block text-xs font-medium text-slate-500">KPI Code *</label>
+          <input id="kpi-master-code" [(ngModel)]="form.kpiCode" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm" placeholder="e.g. ON_TIME_DELIVERY" [disabled]="!!editingId" />
+        </div>
+        <div>
+          <label for="kpi-master-category" class="mb-1 block text-xs font-medium text-slate-500">Category *</label>
+          <select id="kpi-master-category" [(ngModel)]="form.categoryId" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+            <option [ngValue]="0">— Select category —</option>
+            <option *ngFor="let cat of categories" [ngValue]="cat.id">{{ cat.categoryCode }} – {{ cat.categoryName }}</option>
+          </select>
+        </div>
+        <div>
+          <label for="kpi-master-weight" class="mb-1 block text-xs font-medium text-slate-500">Default Weight (%)</label>
+          <input id="kpi-master-weight" [(ngModel)]="form.defaultWeight" type="number" min="0" max="100" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm" />
+        </div>
+
+        <div>
+          <label for="kpi-master-type" class="mb-1 block text-xs font-medium text-slate-500">KPI Type</label>
+          <select id="kpi-master-type" [(ngModel)]="form.kpiType" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+            <option *ngFor="let t of kpiTypeOptions" [value]="t">{{ t }}</option>
+          </select>
+        </div>
+        <div>
+          <label for="kpi-master-target-type" class="mb-1 block text-xs font-medium text-slate-500">Target Type</label>
+          <select id="kpi-master-target-type" [(ngModel)]="form.targetType" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+            <option *ngFor="let t of targetTypeOptions" [value]="t">{{ t }}</option>
+          </select>
+        </div>
+        <div>
+          <div class="mb-1 flex items-center justify-between">
+            <label for="kpi-master-frequency" class="block text-xs font-medium text-slate-500">Frequency</label>
+            <a routerLink="/kpi/frequencies" (click)="closeModal()" class="text-xs text-dt-700 hover:underline">Manage custom</a>
+          </div>
+          <select id="kpi-master-frequency" [(ngModel)]="form.frequency" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+            <option *ngIf="frequencyOptions.length === 0" value="MONTHLY">MONTHLY</option>
+            <option *ngFor="let f of frequencyOptions" [value]="f">{{ f }}</option>
+          </select>
+        </div>
+        <div>
+          <label for="kpi-master-unit" class="mb-1 block text-xs font-medium text-slate-500">Measurement Unit</label>
+          <input id="kpi-master-unit" [(ngModel)]="form.measurementUnit" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm" placeholder="e.g. % or count" />
+        </div>
+
+        <div>
+          <div class="mb-1 flex items-center justify-between">
+            <label for="kpi-master-source" class="block text-xs font-medium text-slate-500">Data Source</label>
+            <a routerLink="/kpi/data-sources" (click)="closeModal()" class="text-xs text-dt-700 hover:underline">Manage custom</a>
+          </div>
+          <select id="kpi-master-source" [(ngModel)]="form.dataSource" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+            <option *ngIf="dataSourceOptions.length === 0" value="Manual">Manual</option>
+            <option *ngIf="form.dataSource && dataSourceOptions.indexOf(form.dataSource) === -1" [value]="form.dataSource">{{ form.dataSource }} (current)</option>
+            <option *ngFor="let source of dataSourceOptions" [value]="source">{{ source }}</option>
+          </select>
+        </div>
+        <div class="md:col-span-2">
+          <label for="kpi-master-description" class="mb-1 block text-xs font-medium text-slate-500">Definition / Description</label>
+          <input id="kpi-master-description" [(ngModel)]="form.description" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm" placeholder="What exactly this KPI measures" />
+        </div>
+        <div class="md:col-span-3">
+          <div class="mb-1 flex items-center justify-between">
+            <label class="block text-xs font-medium text-slate-500">Mapped Roles</label>
+            <label class="text-xs text-slate-500 inline-flex items-center gap-2">
+              <input type="checkbox" [checked]="allRolesSelected" (change)="toggleAllRolesInForm($any($event.target).checked)" />
+              Select all
+            </label>
+          </div>
+          <div class="max-h-28 overflow-y-auto rounded-lg border border-dt-200 p-2">
+            <label *ngFor="let role of roles" class="flex items-center gap-2 py-1 text-sm text-slate-700">
+              <input type="checkbox" [checked]="isRoleMapped(role.id)" (change)="toggleRoleInForm(role.id, $any($event.target).checked)" />
+              <span class="font-mono text-xs text-slate-500">{{ role.roleCode }}</span>
+              <span>{{ role.roleName }}</span>
+            </label>
+            <p *ngIf="roles.length === 0" class="text-xs text-slate-400">No roles available.</p>
+          </div>
+          <p class="mt-1 text-xs text-slate-400">A KPI can be mapped to multiple roles.</p>
+        </div>
+        <div class="flex items-end">
+          <label class="flex items-center gap-2 rounded-lg border border-dt-200 px-3 py-2 text-sm w-full">
+            <input type="checkbox" [(ngModel)]="form.active" /> Active
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="flex justify-end gap-2 border-t px-5 py-4">
+      <button (click)="closeModal()" class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50">Cancel</button>
+      <button [disabled]="saving" (click)="save()"
+        class="rounded-lg bg-dt-600 hover:bg-dt-700 disabled:opacity-50 px-4 py-2 text-sm font-semibold text-white">
+        {{ saving ? 'Saving...' : (editingId ? 'Update KPI Master' : 'Add KPI Master') }}
+      </button>
+    </div>
+  </div>
+</div>

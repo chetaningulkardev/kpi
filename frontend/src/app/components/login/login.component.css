@@ -1,0 +1,41 @@
+:host {
+  display: block;
+}
+
+/* ── Page shell ── */
+.login-shell {
+  background-image:
+    radial-gradient(circle at 1px 1px, rgba(148, 163, 184, 0.22) 1px, transparent 0),
+    linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%);
+  background-size: 26px 26px, 100% 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+}
+
+/* ── Left hero panel ── */
+.login-aside {
+  min-height: 680px;
+}
+
+.login-aside-bg {
+  /*
+   * Self-contained on purpose. This used to pull a photo from Unsplash, which
+   * the Content-Security-Policy blocks (img-src 'self' data: blob:) and which
+   * also left the first screen of the app dependent on the network being up.
+   * A painted gradient in the brand magenta renders identically offline.
+   */
+  background-color: var(--magenta-600, #C6006A);
+  background-image:
+    radial-gradient(circle at 22% 18%, rgba(255, 255, 255, .22), transparent 45%),
+    radial-gradient(circle at 82% 78%, rgba(90, 0, 64, .55), transparent 55%),
+    linear-gradient(135deg, #E20074 0%, #A20060 55%, #5A0040 100%);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  transition: transform 20s ease;
+}
+
+.login-aside:hover .login-aside-bg {
+  transform: scale(1.04);
+}

@@ -1,0 +1,267 @@
+<section class="space-y-6">
+  <header class="panel p-6">
+    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-dt-700">KPI Management</p>
+    <h2 class="mt-1 text-2xl font-bold text-slate-900">KPI Templates</h2>
+    <p class="mt-2 text-sm text-slate-600">Role-based KPI bundles that define which KPI masters apply to a given role.</p>
+  </header>
+  <p *ngIf="result && !showTemplateModal" role="status" class="rounded-lg border bg-white p-4 text-sm text-slate-800">{{ result }}</p>
+  <p *ngIf="loadError" role="alert" class="text-sm text-rose-800">{{ loadError }} <button (click)="load()" class="underline">Retry templates</button></p>
+  <p *ngIf="mastersLoading || rolesLoading" role="status" class="text-sm text-slate-600">Loading template configuration options…</p>
+  <p *ngIf="mastersError" role="alert" class="text-sm text-rose-800">{{ mastersError }} <button (click)="loadMasters()" class="underline">Retry KPI masters</button></p>
+  <p *ngIf="rolesError" role="alert" class="text-sm text-rose-800">{{ rolesError }} <button (click)="loadRoles()" class="underline">Retry roles</button></p>
+
+  <!-- Add Template Button -->
+  <section class="panel p-6">
+    <button (click)="newTemplate()"
+      class="rounded-lg bg-dt-600 hover:bg-dt-700 px-4 py-2 text-sm font-semibold text-white">
+      + Add Template
+    </button>
+  </section>
+
+  <!-- Template Cards -->
+  <section class="panel p-6">
+    <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <h3 class="text-sm font-semibold uppercase tracking-wide text-dt-700">All Templates</h3>
+      <div class="flex items-center gap-2 text-xs">
+        <label class="inline-flex items-center gap-2 text-slate-600">
+          <input type="checkbox"
+            [checked]="allFilteredSelected"
+            (change)="toggleSelectAllFiltered($any($event.target).checked)"
+            class="rounded border-slate-300" />
+          Select all filtered
+        </label>
+      </div>
+    </div>
+
+    <div class="mb-4 grid gap-3 md:grid-cols-5">
+      <input [(ngModel)]="searchTerm"
+        class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm"
+        placeholder="Search name/code/description" />
+      <select [(ngModel)]="filterRoleCode" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+        <option value="">All Roles</option>
+        <option *ngFor="let role of roles" [value]="role.roleCode">{{ role.roleCode }}</option>
+      </select>
+      <select [(ngModel)]="filterStatus" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+        <option value="">All Statuses</option>
+        <option *ngFor="let status of availableStatuses" [value]="status">{{ status }}</option>
+      </select>
+      <select [(ngModel)]="filterActive" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+        <option value="ALL">All Active States</option>
+        <option value="ACTIVE">Active</option>
+        <option value="INACTIVE">Inactive</option>
+      </select>
+      <button (click)="clearFilters()"
+        class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+        Clear Filters
+      </button>
+    </div>
+
+    <div class="mb-3 flex flex-wrap items-center gap-2" *ngIf="selectedCount > 0">
+      <span class="text-xs text-slate-600">{{ selectedCount }} selected</span>
+      <button (click)="deleteSelected()" [disabled]="bulkDeleting"
+        class="rounded-lg bg-rose-600 hover:bg-rose-700 disabled:opacity-50 px-3 py-1.5 text-xs font-semibold text-white">
+        {{ bulkDeleting ? 'Deleting...' : 'Delete Selected' }}
+      </button>
+      <button (click)="clearSelection()"
+        class="rounded-lg border border-slate-300 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50">
+        Clear Selection
+      </button>
+    </div>
+
+    <div *ngIf="loading" class="text-center text-slate-500 py-6">Loading...</div>
+
+    <div *ngIf="!loading">
+      <div *ngFor="let template of filteredTemplates" class="mt-4 rounded-xl border border-dt-100 bg-dt-50/40 p-4">
+        <div class="flex items-start justify-between gap-3">
+          <div class="flex items-start gap-3">
+            <input type="checkbox"
+              [checked]="isTemplateSelected(template)"
+              (change)="toggleTemplateSelection(template, $any($event.target).checked)"
+              class="mt-1 rounded border-slate-300" />
+            <div>
+              <h4 class="text-base font-semibold text-slate-900">{{ template.name }}</h4>
+              <p class="text-xs text-slate-400">
+                {{ template.code }} | Role: {{ template.roleCode }}
+                <span class="ml-2" *ngIf="$any(template).status">Status: {{ $any(template).status }}</span>
+              </p>
+              <p *ngIf="template.description" class="text-sm text-slate-500 mt-1">{{ template.description }}</p>
+              <p class="mt-1 text-xs text-slate-500">Items: {{ template.items.length }} | Total weight: {{ totalWeight(template) }}%</p>
+            </div>
+          </div>
+          <div class="flex gap-2 text-xs shrink-0 flex-wrap justify-end">
+            <button class="text-violet-700 hover:text-violet-900 font-medium" (click)="openItemsPopup(template)">Manage Items</button>
+            <button class="text-emerald-700 hover:text-emerald-900 font-medium" (click)="activateTemplate(template)">Activate</button>
+            <button class="text-amber-700 hover:text-amber-900 font-medium" (click)="cloneTemplate(template)">Clone</button>
+            <button class="text-slate-700 hover:text-slate-900 font-medium" (click)="archiveTemplate(template)">Archive</button>
+            <button class="text-sky-700 hover:text-sky-900 font-medium" (click)="edit(template)">Edit</button>
+            <button class="text-rose-700 hover:text-rose-900 font-medium" (click)="delete(template)">Delete</button>
+          </div>
+        </div>
+        <div *ngFor="let item of template.items"
+          class="mt-2 flex items-center justify-between rounded-lg bg-white px-3 py-2 text-sm border border-dt-50">
+          <span class="font-medium text-slate-700">{{ item.kpiName }}</span>
+          <span class="rounded-md bg-dt-600 px-2 py-1 text-xs font-semibold text-white">{{ item.weight }}%</span>
+        </div>
+        <p *ngIf="!template.items.length" class="mt-2 text-xs text-slate-400 italic">No KPI items linked yet.</p>
+      </div>
+      <p *ngIf="!loadError && filteredTemplates.length === 0" class="mt-4 text-xs text-slate-400">No templates match your filters. Clear filters or use Add Template to create a role-based KPI bundle.</p>
+    </div>
+  </section>
+</section>
+
+<!-- Items Popup -->
+<div *ngIf="showItemModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" (click)="closeItemsPopup()">
+  <div class="w-full max-w-3xl rounded-xl bg-white shadow-2xl" appAccessibleModal="Manage template items" (dismiss)="closeItemsPopup()" (click)="$event.stopPropagation()">
+    <div class="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+      <div>
+        <h3 class="text-lg font-semibold text-slate-900">Manage Template Items</h3>
+        <p class="text-xs text-slate-500">{{ selectedTemplate?.code }} | Total weight: {{ totalWeight(selectedTemplate) }}%</p>
+      </div>
+      <button type="button" aria-label="Close dialog" class="text-slate-400 hover:text-slate-600 text-2xl" (click)="closeItemsPopup()">&times;</button>
+    </div>
+
+    <div class="px-6 py-4 space-y-4">
+      <p *ngIf="itemMsg" class="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">{{ itemMsg }}</p>
+
+      <div class="grid gap-3 md:grid-cols-4">
+        <div class="md:col-span-2">
+          <label class="mb-1 block text-xs text-slate-500">KPI Master *</label>
+          <select [(ngModel)]="itemForm.kpiMasterId" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+            <option [ngValue]="null">-- Select KPI Master --</option>
+            <option *ngFor="let m of availableMastersForSelectedTemplate" [ngValue]="m.id">{{ m.kpiCode }} - {{ m.kpiName }}</option>
+          </select>
+          <p class="mt-1 text-xs text-slate-400" *ngIf="selectedTemplate?.roleCode">Showing KPI masters mapped to role: {{ selectedTemplate?.roleCode }}</p>
+        </div>
+        <div>
+          <label class="mb-1 block text-xs text-slate-500">Weight (%) *</label>
+          <input type="number" min="0" max="100" [(ngModel)]="itemForm.weight" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="mb-1 block text-xs text-slate-500">Target</label>
+          <input [(ngModel)]="itemForm.target" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm" placeholder="e.g. >=95" />
+        </div>
+      </div>
+
+      <button [disabled]="itemSaving || confirmPopup.visible" (click)="addTemplateItem()" class="rounded-lg bg-dt-600 px-4 py-2 text-sm font-semibold text-white hover:bg-dt-700 disabled:opacity-50">
+        {{ itemSaving ? 'Adding...' : 'Add Item' }}
+      </button>
+
+      <div class="rounded-lg border border-slate-200">
+        <table class="min-w-full text-sm">
+          <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+            <tr>
+              <th class="px-3 py-2">KPI</th>
+              <th class="px-3 py-2">Target</th>
+              <th class="px-3 py-2">Weight</th>
+              <th class="px-3 py-2 text-right">Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let item of selectedTemplate?.items" class="border-t border-slate-100">
+              <td class="px-3 py-2 text-slate-700">{{ item.kpiCode }} - {{ item.kpiName }}</td>
+              <td class="px-3 py-2 text-slate-500">{{ item.targetValue || '-' }}</td>
+              <td class="px-3 py-2">
+                <span class="rounded bg-dt-100 px-2 py-1 text-xs font-semibold text-dt-700">{{ item.weight }}%</span>
+              </td>
+              <td class="px-3 py-2 text-right">
+                <button class="text-rose-700 hover:text-rose-900 text-xs font-semibold" (click)="removeTemplateItem(item.id)">Remove</button>
+              </td>
+            </tr>
+            <tr *ngIf="!(selectedTemplate?.items?.length)">
+              <td colspan="4" class="px-3 py-4 text-center text-xs text-slate-400">No template items yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="border-t border-slate-200 px-6 py-3 text-right">
+      <button class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50" (click)="closeItemsPopup()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Action Confirmation Popup -->
+<div *ngIf="confirmPopup.visible"
+  class="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4"
+  (click)="cancelConfirmPopup()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md"
+    [appAccessibleModal]="confirmPopup.title"
+    (dismiss)="cancelConfirmPopup()"
+    (click)="$event.stopPropagation()">
+
+    <div class="px-5 py-4 border-b border-slate-200">
+      <h3 class="text-base font-semibold text-slate-900">{{ confirmPopup.title }}</h3>
+      <p class="mt-1 text-sm text-slate-600">{{ confirmPopup.message }}</p>
+    </div>
+
+    <div class="px-5 py-4 flex justify-end gap-2">
+      <button (click)="cancelConfirmPopup()"
+        class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+        Cancel
+      </button>
+      <button (click)="confirmPopupAction()"
+        [class]="confirmPopup.dangerous
+          ? 'rounded-lg bg-rose-600 hover:bg-rose-700 px-4 py-2 text-sm font-semibold text-white'
+          : 'rounded-lg bg-dt-600 hover:bg-dt-700 px-4 py-2 text-sm font-semibold text-white'">
+        {{ confirmPopup.actionLabel }}
+      </button>
+     </div>
+   </div>
+ </div>
+
+<!-- Template Form Modal -->
+<div *ngIf="showTemplateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" (click)="closeTemplateModal()">
+  <div class="w-full max-w-2xl rounded-xl bg-white shadow-2xl" [appAccessibleModal]="templateModalTitle" (dismiss)="closeTemplateModal()" (click)="$event.stopPropagation()">
+    <!-- Header -->
+    <div class="border-b border-slate-200 px-6 py-4 flex items-center justify-between">
+      <h3 class="text-lg font-semibold text-slate-900">{{ templateModalTitle }}</h3>
+      <button type="button" aria-label="Close dialog" class="text-slate-400 hover:text-slate-600 text-2xl" (click)="closeTemplateModal()">&times;</button>
+    </div>
+
+    <!-- Form Content -->
+    <div class="px-6 py-4 space-y-4">
+      <p *ngIf="result" [class]="'rounded-lg border px-3 py-2 text-sm ' + (result.includes('successfully') || result.includes('updated') || result.includes('created') ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-rose-200 bg-rose-50 text-rose-700')">{{ result }}</p>
+
+      <!-- Role (First Field) -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-2">Role *</label>
+        <select [(ngModel)]="form.roleId" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm">
+          <option [ngValue]="null">-- Select Role --</option>
+          <option *ngFor="let role of roles" [ngValue]="role.id">{{ role.roleCode }} - {{ role.roleName }}</option>
+        </select>
+      </div>
+
+      <!-- Template Name -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-2">Template Name *</label>
+        <input [(ngModel)]="form.templateName" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm" placeholder="e.g. Developer Template Q1" />
+      </div>
+
+      <!-- Template Code -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-2">Template Code *</label>
+        <input [(ngModel)]="form.templateCode" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm" placeholder="e.g. DEV_TEMPLATE_Q1" [disabled]="!!editingId" />
+        <p class="mt-1 text-xs text-slate-400" *ngIf="editingId">Code cannot be changed when editing</p>
+      </div>
+
+      <!-- Description -->
+      <div>
+        <label class="block text-sm font-semibold text-slate-700 mb-2">Description</label>
+        <textarea [(ngModel)]="form.description" class="w-full rounded-lg border border-dt-200 px-3 py-2 text-sm" placeholder="Optional description" rows="3"></textarea>
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="border-t border-slate-200 px-6 py-4 flex justify-end gap-3">
+      <button (click)="closeTemplateModal()" [disabled]="saving"
+        class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
+        Cancel
+      </button>
+      <button [disabled]="saving || confirmPopup.visible" (click)="save()"
+        class="rounded-lg bg-dt-600 hover:bg-dt-700 disabled:opacity-50 px-6 py-2 text-sm font-semibold text-white">
+        {{ saving ? 'Saving...' : (editingId ? 'Update Template' : 'Create Template') }}
+      </button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,58 @@
+# Runs the whole stack locally: PostgreSQL plus the application.
+#
+#   cp .env.example .env      # then set JWT_SECRET
+#   docker compose up --build
+#
+# The app is served on http://localhost:8080 — the Angular bundle is built into
+# the image and served by Spring Boot, so there is no separate frontend service.
+
+services:
+
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-kpi}
+      POSTGRES_USER: ${DB_USERNAME:-kpi_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-kpi_pass}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Published so you can inspect the database with a local client. Drop this
+    # line if 5432 is already taken by a native PostgreSQL install.
+    ports:
+      - "5432:5432"
+    healthcheck:
+      # Without this the app would start first, fail to connect, and exit before
+      # PostgreSQL finished initialising on a cold volume.
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-kpi_user} -d ${DB_NAME:-kpi}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-kpi}
+      DB_USERNAME: ${DB_USERNAME:-kpi_user}
+      DB_PASSWORD: ${DB_PASSWORD:-kpi_pass}
+      # No default. The application refuses to start without it — see
+      # DEPLOYMENT_CONFIGURATION.md. Quoted because the message contains ": ",
+      # which YAML would otherwise read as a nested mapping.
+      JWT_SECRET: "${JWT_SECRET:?set JWT_SECRET in .env - generate one with: openssl rand -base64 64}"
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:8080}
+    ports:
+      - "8080:8080"
+    volumes:
+      # Evidence uploads are referenced by database rows that survive a restart,
+      # so the files must survive one too.
+      - evidence:/var/lib/kpi/evidence
+
+volumes:
+  db-data:
+  evidence:

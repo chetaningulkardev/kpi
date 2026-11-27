@@ -1,0 +1,192 @@
+spring:
+  application:
+    name: KPI
+
+  # DataSource Configuration
+  #
+  # Defaults target a local development database. CI and Docker Compose supply
+  # DB_URL/DB_USERNAME/DB_PASSWORD instead; the prod profile requires them and
+  # provides no fallback at all.
+  datasource:
+    # Use 127.0.0.1 instead of localhost to avoid macOS IPv6-first DNS resolution delay
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/kpi}
+    driver-class-name: org.postgresql.Driver
+    username: ${DB_USERNAME:kpi_user}
+    password: ${DB_PASSWORD:kpi_password}
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      # Keep connections alive so they don't go stale after Mac sleep/idle
+      keepalive-time: 30000          # ping every 30 s to keep connections fresh
+      idle-timeout: 300000           # evict idle connections after 5 min
+      connection-timeout: 3000       # fail fast if no connection in 3 s
+      validation-timeout: 1500       # validate a connection in max 1.5 s
+      connection-test-query: SELECT 1  # lightweight test query on borrow
+
+  # Schema Migration (Flyway)
+  #
+  # Flyway owns the schema. On a database that predates Flyway,
+  # baseline-on-migrate stamps it at V1 and skips the baseline script, then
+  # applies V2 onwards; a fresh database runs everything from V1.
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: "Baseline schema for KPI"
+    # Fail rather than silently repair when a migration file is edited after
+    # it has been applied somewhere.
+    validate-on-migrate: true
+    out-of-order: false
+
+  # JPA/Hibernate Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      # `validate`, never `update`: Hibernate now checks that the mapping
+      # matches what the migrations produced and refuses to boot on drift,
+      # instead of quietly altering production tables at startup.
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+  # Jackson Configuration
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      fail-on-empty-beans: false
+    stream:
+      write-nesting-depth: 2000
+
+  # Web Configuration
+  web:
+    resources:
+      static-locations: classpath:/static/
+
+  # Evidence uploads. Spring's defaults are 1MB per file / 10MB per request,
+  # which rejects an ordinary scanned PDF. The service layer already restricts
+  # uploads to PDF/JPG/PNG; this caps the size. Anything larger is turned away
+  # by the container before it reaches a handler, and ApiExceptionHandler maps
+  # that to 413 rather than a 500.
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 12MB
+
+# Server Configuration
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-stacktrace: on_param
+
+# Logging Configuration
+#
+# %X{correlationId} is set by CorrelationIdFilter and returned to the caller in
+# the X-Correlation-Id header, so a reported failure can be traced to its exact
+# request.
+logging:
+  level:
+    root: INFO
+    com.example.kpi: INFO
+    org.springframework.security: INFO
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] [%X{correlationId:-}] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] [%X{correlationId:-}] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/kpi.log
+
+# JWT Configuration
+#
+# The signing key is deliberately NOT given a usable default. A hard-coded
+# fallback ships a key that is public knowledge to anyone with the source, and
+# anyone holding it can mint a token for any account. JwtTokenProvider validates
+# this at startup and refuses to boot if it is missing, too short, or still the
+# old placeholder.
+#
+# Generate one with:  openssl rand -base64 64
+jwt:
+  secret: ${JWT_SECRET:}
+  expiration: 3600000
+  refresh-expiration: 86400000
+
+# Application Configuration
+app:
+  # Automated KPI actuals. Off by default: a connector with no credentials is
+  # worse than none, because the UI would offer a button that always fails.
+  metrics:
+    github:
+      enabled: ${GITHUB_METRICS_ENABLED:false}
+      # A classic or fine-grained PAT with read access. Unauthenticated search
+      # is capped at 10 requests/minute per IP, which one cycle would exhaust.
+      token: ${GITHUB_TOKEN:}
+      base-url: ${GITHUB_API_URL:https://api.github.com}
+
+  security:
+    login:
+      # Fixed-window limit on /api/auth/login, keyed by client address + account.
+      # In-memory, so each instance counts separately — revisit before scaling out.
+      max-attempts: 10
+      window-seconds: 300
+    denylist:
+      # How often revoked-token entries past their own expiry are swept.
+      sweep-ms: 900000
+  evidence:
+    upload-dir: uploads/kpi-evidence
+  mail:
+    # Off by default: notifications still land in-app, they are simply not
+    # mirrored to email until an SMTP host is configured below.
+    enabled: false
+    from: no-reply@kpi.local
+    subject-prefix: "[KPI] "
+  reminders:
+    # Daily at 08:00. Set to a far-future expression to disable.
+    cron: "0 0 8 * * *"
+
+# Health checks and metrics. Only the operational endpoints are exposed; the
+# full actuator surface is deliberately not opened up.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+  health:
+    # Off by default, and deliberately so.
+    #
+    # Spring contributes a mail indicator whenever a JavaMailSender exists, and
+    # it opens an SMTP connection on every probe. With no reachable relay that
+    # check fails, which drags the aggregate /actuator/health to DOWN — the same
+    # endpoint a container runtime uses as its readiness probe. The result is an
+    # application that serves every request correctly and is never given any
+    # traffic, because notification email is unavailable.
+    #
+    # Undelivered mail is a degraded feature, not an unhealthy instance:
+    # EmailNotificationService already logs and carries on. Turn this back on
+    # only where an unreachable relay genuinely should take the node out of
+    # rotation.
+    mail:
+      enabled: false
+
+# SMTP — only used when app.mail.enabled is true
+spring.mail:
+  host: ${MAIL_HOST:localhost}
+  port: ${MAIL_PORT:25}
+  username: ${MAIL_USERNAME:}
+  password: ${MAIL_PASSWORD:}
+  properties:
+    mail:
+      smtp:
+        auth: ${MAIL_SMTP_AUTH:false}
+        starttls:
+          enable: ${MAIL_SMTP_STARTTLS:false}
+
+

@@ -1,0 +1,610 @@
+<section class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+
+  <!-- Page Header -->
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-dt-700">Performance Review</p>
+      <h1 class="mt-1 text-2xl font-bold text-slate-900">My KPIs</h1>
+      <p class="mt-1 text-sm text-slate-500">
+        View your assigned KPIs and submit self-assessments for the current review cycle.
+      </p>
+    </div>
+    <div class="flex items-center gap-2">
+      <!-- View toggle -->
+      <div class="flex items-center rounded-lg border border-slate-200 overflow-hidden" *ngIf="allMyKpis.length > 0">
+        <button (click)="tableView = false" title="Card View"
+          class="px-3 py-2 text-sm transition"
+          [ngClass]="!tableView ? 'bg-dt-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'">
+          ⊞
+        </button>
+        <button (click)="tableView = true" title="Table View"
+          class="px-3 py-2 text-sm border-l border-slate-200 transition"
+          [ngClass]="tableView ? 'bg-dt-600 text-white' : 'bg-white text-slate-500 hover:bg-slate-50'">
+          ☰
+        </button>
+      </div>
+      <!-- Submit all button -->
+      <button
+        *ngIf="!kpisLoading && allMyKpis.length > 0"
+        (click)="submitAllAssessments()"
+        [disabled]="bulkSubmitting || pendingCount === 0"
+        title="{{ pendingCount === 0 ? 'No pending KPIs to submit' : 'Submit all pending KPIs' }}"
+        class="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
+        [ngClass]="pendingCount > 0 ? 'bg-dt-600 hover:bg-dt-700 text-white' : 'bg-slate-100 text-slate-400'">
+        <span>{{ bulkSubmitting ? '⌛' : '↑' }}</span>
+        {{ bulkSubmitting ? 'Submitting…' : 'Submit All (' + pendingCount + ')' }}
+      </button>
+    </div>
+  </div>
+
+  <!-- Cycle Selector & Deadline Banner -->
+  <div class="bg-white rounded-xl shadow px-5 py-4 space-y-3">
+    <div class="flex flex-wrap items-end gap-4">
+      <div class="flex-1 min-w-48">
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Review Cycle</label>
+        <select [(ngModel)]="selectedCycleCode" (ngModelChange)="onCycleChange()" [disabled]="submitting || bulkSubmitting"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none">
+          <option value="" disabled>— Select a cycle —</option>
+          <option *ngFor="let c of cycles" [value]="c.code">{{ c.name }} ({{ c.statusCode }})</option>
+        </select>
+      </div>
+      <div *ngIf="cyclesLoading" class="text-sm text-slate-400 animate-pulse">Loading cycles…</div>
+      <div *ngIf="!cyclesLoading && !loadError && cycles.length === 0" class="text-sm text-slate-400">
+        No active review cycles found.
+        Ask your administrator to open a review cycle, then
+        <button (click)="loadCycles()" class="text-dt-700 underline">refresh cycles</button>.
+      </div>
+    </div>
+    <!-- Cycle deadline banner -->
+    <div *ngIf="selectedCycle" class="flex items-center gap-2 text-xs border-t pt-3">
+      <span class="text-slate-400">{{ selectedCycle.startDate | date:'mediumDate' }} → {{ selectedCycle.endDate | date:'mediumDate' }}</span>
+      <span *ngIf="cycleDaysRemaining !== null && cycleDaysRemaining >= 0 && selectedCycle.statusCode !== 'CLOSED'"
+        class="rounded-full px-2 py-0.5 font-semibold"
+        [ngClass]="cycleDaysRemaining <= 3 ? 'bg-rose-100 text-rose-700' : cycleDaysRemaining <= 7 ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'">
+        {{ cycleDaysRemaining === 0 ? '⚠️ Due today' : cycleDaysRemaining + 'd remaining' }}
+      </span>
+      <span *ngIf="selectedCycle.statusCode === 'CLOSED'"
+        class="rounded-full px-2 py-0.5 font-semibold bg-slate-100 text-slate-500">🔒 Cycle Closed</span>
+    </div>
+  </div>
+
+  <!-- Page-level flash message -->
+  <p *ngIf="loadError" role="alert" class="rounded-lg bg-rose-50 p-4 text-sm text-rose-800">{{ loadError }}
+    <button (click)="cycles.length ? loadMyKpis() : loadCycles()" class="ml-2 underline">Retry</button>
+  </p>
+  <div *ngIf="pageMsg" class="rounded-lg px-4 py-3 text-sm font-medium border"
+    [class.bg-green-50]="!pageMsgIsError" [class.text-green-800]="!pageMsgIsError" [class.border-green-300]="!pageMsgIsError"
+    [class.bg-rose-50]="pageMsgIsError"   [class.text-rose-800]="pageMsgIsError"   [class.border-rose-300]="pageMsgIsError">
+    {{ pageMsg }}
+  </div>
+
+  <!-- Summary cards & Filters -->
+  <div *ngIf="!kpisLoading && allMyKpis.length > 0" class="space-y-4">
+    <!-- Summary Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+      <div class="bg-white rounded-xl shadow px-4 py-3 text-center">
+        <p class="text-2xl font-bold text-dt-700">{{ allMyKpis.length }}</p>
+        <p class="text-xs text-slate-500 mt-1">Total KPIs</p>
+      </div>
+      <div class="bg-white rounded-xl shadow px-4 py-3 text-center">
+        <p class="text-2xl font-bold text-amber-600">{{ actionNeededCount }}</p>
+        <p class="text-xs text-slate-500 mt-1">Action Needed</p>
+      </div>
+      <div class="bg-white rounded-xl shadow px-4 py-3 text-center">
+        <p class="text-2xl font-bold text-blue-600">{{ submittedCount }}</p>
+        <p class="text-xs text-slate-500 mt-1">Submitted / Reviewed</p>
+      </div>
+      <div class="bg-white rounded-xl shadow px-4 py-3 text-center"
+        [ngClass]="totalWeight !== 100 ? 'ring-2 ring-amber-300' : ''">
+        <p class="text-2xl font-bold" [ngClass]="totalWeight !== 100 ? 'text-amber-600' : 'text-slate-700'">{{ totalWeight }}%</p>
+        <p class="text-xs text-slate-500 mt-1">Total Weight</p>
+      </div>
+    </div>
+
+    <!-- Filters & Search -->
+    <div class="bg-white rounded-lg border p-4 space-y-3">
+      <div class="grid gap-3 md:grid-cols-3">
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Search</label>
+          <input [(ngModel)]="searchTerm" (ngModelChange)="onSearchChange()"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-dt-300 outline-none"
+            placeholder="KPI name or code..." />
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+          <select [(ngModel)]="statusFilter" (ngModelChange)="onStatusFilterChange()"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-dt-300 outline-none">
+            <option value="All">All</option>
+            <option value="PENDING">PENDING</option>
+            <option value="SUBMITTED">SUBMITTED</option>
+            <option value="UNDER_REVIEW">UNDER_REVIEW</option>
+            <option value="APPROVED">APPROVED</option>
+            <option value="REWORK_REQUIRED">REWORK_REQUIRED</option>
+            <option value="REJECTED">REJECTED</option>
+          </select>
+        </div>
+        <div>
+          <label class="block text-xs font-semibold text-slate-600 mb-1">Category</label>
+          <select [(ngModel)]="categoryFilter" (ngModelChange)="onCategoryFilterChange()"
+            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-dt-300 outline-none">
+            <option value="All">All</option>
+            <option *ngFor="let c of categories; trackBy: trackByCategory" [value]="c">{{ c }}</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex items-center justify-between">
+        <button *ngIf="searchTerm || statusFilter !== 'All' || categoryFilter !== 'All'"
+          (click)="clearFilters()"
+          class="text-xs text-dt-700 hover:text-dt-900 font-semibold underline">
+          ✕ Clear filters
+        </button>
+        <p *ngIf="totalWeight !== 100 && allMyKpis.length > 0"
+          class="ml-auto text-xs font-semibold rounded-md px-2 py-1"
+          [ngClass]="totalWeight > 100 ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-amber-50 text-amber-700 border border-amber-200'">
+          ⚠️ Total weight is {{ totalWeight }}% — should equal 100%
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading skeleton -->
+  <div *ngIf="kpisLoading" class="space-y-4">
+    <app-skeleton type="stats" [count]="4"></app-skeleton>
+    <app-skeleton type="cards" [count]="6"></app-skeleton>
+  </div>
+
+  <!-- No cycle selected -->
+  <div *ngIf="!kpisLoading && !selectedCycleCode && cycles.length > 0" class="bg-white rounded-xl shadow text-center py-16 text-slate-400">
+    <p class="text-4xl mb-3">📋</p>
+    <p class="font-medium">Select a review cycle above to view your KPIs.</p>
+  </div>
+
+  <!-- KPI Table -->
+  <div *ngIf="!kpisLoading && selectedCycleCode && tableView" class="bg-white rounded-xl shadow overflow-x-auto">
+    <table class="min-w-full text-sm" *ngIf="filteredKpis.length > 0">
+      <thead class="bg-slate-50 border-b border-slate-200">
+        <tr class="text-left text-xs uppercase text-slate-500 tracking-wide">
+          <th class="px-4 py-3">KPI</th>
+          <th class="px-4 py-3">Category</th>
+          <th class="px-4 py-3 text-right">Weight</th>
+          <th class="px-4 py-3">Target</th>
+          <th class="px-4 py-3 text-right">Actual Value</th>
+          <th class="px-4 py-3 text-right">Score (1-5)</th>
+          <th class="px-4 py-3 text-right">Weighted Score</th>
+          <th class="px-4 py-3 text-center">Evidence</th>
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3 text-right">Rating</th>
+          <th class="px-4 py-3 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr *ngFor="let kpi of filteredKpis; trackBy: trackByKpiId" class="hover:bg-dt-50 transition-colors">
+          <td class="px-4 py-3">
+            <p class="font-semibold text-slate-900">{{ kpi.kpiName }}</p>
+          </td>
+          <td class="px-4 py-3 text-slate-500 text-xs">{{ kpi.categoryName }}</td>
+          <td class="px-4 py-3 text-right font-semibold text-slate-700">{{ kpi.weight }}%</td>
+          <td class="px-4 py-3 text-slate-600 text-xs">{{ kpi.target }}</td>
+          <td class="px-4 py-3 text-right">
+            <span *ngIf="kpi.actualValue != null" class="font-semibold text-slate-800">{{ kpi.actualValue }}</span>
+            <span *ngIf="kpi.actualValue == null" class="text-slate-400">—</span>
+          </td>
+          <td class="px-4 py-3 text-right text-slate-700">
+            <span *ngIf="kpiScore(kpi) != null" class="font-semibold">{{ kpiScore(kpi) }}</span>
+            <span *ngIf="kpiScore(kpi) == null" class="text-slate-400">—</span>
+          </td>
+          <td class="px-4 py-3 text-right text-slate-700">
+            <span *ngIf="weightedScore(kpi) != null" class="font-semibold">{{ weightedScore(kpi) | number:'1.2-2' }}</span>
+            <span *ngIf="weightedScore(kpi) == null" class="text-slate-400">—</span>
+          </td>
+          <td class="px-4 py-3 text-center">
+            <button *ngIf="evidenceCount(kpi.id) > 0"
+              class="text-blue-700 hover:text-blue-900 text-xs font-semibold"
+              (click)="openEvidence(evidenceByKpi[kpi.id][0].contentUrl)">
+              📎 {{ evidenceCount(kpi.id) }}
+            </button>
+            <span *ngIf="evidenceLoading[kpi.id]" role="status" class="text-slate-600 text-xs">Loading evidence…</span>
+            <span *ngIf="evidenceErrors[kpi.id]" role="alert" class="text-rose-800 text-xs">{{ evidenceErrors[kpi.id] }}</span>
+            <span *ngIf="!evidenceLoading[kpi.id] && !evidenceErrors[kpi.id] && evidenceCount(kpi.id) === 0" class="text-slate-400 text-xs">—</span>
+          </td>
+          <td class="px-4 py-3">
+            <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" [class]="statusClass(kpi.status)">
+              {{ kpi.status }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-right text-xs text-slate-600">
+            {{ finalRatingLabel(kpi) }}
+          </td>
+          <td class="px-4 py-3 text-right">
+            <button *ngIf="canEdit(kpi)"
+              class="text-dt-700 hover:text-dt-900 text-xs font-semibold transition"
+              (click)="openAssess(kpi)">
+              {{ canAssess(kpi) ? '📝 Assess' : '✏️ Edit' }}
+            </button>
+            <button *ngIf="!canEdit(kpi)"
+              class="text-slate-400 text-xs cursor-default" disabled>
+              View Only
+            </button>
+          </td>
+        </tr>
+      </tbody>
+      <tfoot class="bg-amber-50 border-t border-amber-200">
+        <tr class="text-sm font-semibold text-slate-800">
+          <td class="px-4 py-3" colspan="2">TOTAL (weighted score out of 5)</td>
+          <td class="px-4 py-3 text-right">{{ totalWeight }}%</td>
+          <td class="px-4 py-3" colspan="3"></td>
+          <td class="px-4 py-3 text-right">{{ totalWeightedScore | number:'1.2-2' }}</td>
+          <td class="px-4 py-3" colspan="4"></td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div *ngIf="!loadError && filteredKpis.length === 0 && selectedCycleCode" class="text-center py-16 text-slate-400">
+      <p class="text-4xl mb-3">📋</p>
+      <p class="font-medium">
+        {{ allMyKpis.length === 0 ? 'No KPIs assigned to you for this cycle.' : 'No KPIs match your filters.' }}
+      </p>
+      <p class="text-sm mt-1">
+        {{ allMyKpis.length === 0 ? 'KPIs are generated by an Admin. Contact your manager if you expect to see KPIs here.' : 'Adjust your search or filters.' }}
+      </p>
+      <button *ngIf="allMyKpis.length === 0" (click)="loadMyKpis()" class="mt-3 text-dt-700 underline font-semibold">Refresh KPIs</button>
+      <button *ngIf="searchTerm || statusFilter !== 'All' || categoryFilter !== 'All'"
+        (click)="clearFilters()"
+        class="text-xs text-dt-700 hover:text-dt-900 font-semibold underline mt-3">
+        ✕ Clear filters
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI Card View -->
+  <div *ngIf="!kpisLoading && selectedCycleCode && !tableView" class="space-y-3">
+    <div *ngIf="filteredKpis.length > 0" class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <article *ngFor="let kpi of filteredKpis; trackBy: trackByKpiId"
+        class="rounded-xl border bg-white p-5 shadow-sm transition hover:shadow-md"
+        [ngClass]="{
+          'border-slate-200': kpi.status === 'PENDING',
+          'border-blue-200': kpi.status === 'SUBMITTED',
+          'border-amber-200': kpi.status === 'UNDER_REVIEW',
+          'border-emerald-200': kpi.status === 'APPROVED',
+          'border-orange-300': kpi.status === 'REWORK_REQUIRED',
+          'border-rose-200': kpi.status === 'REJECTED'
+        }">
+
+        <!-- Card Header -->
+        <div class="flex items-start justify-between gap-3">
+          <div class="min-w-0 flex-1">
+            <h3 class="truncate text-sm font-semibold text-slate-900">{{ kpi.kpiName }}</h3>
+          </div>
+          <span class="shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold" [class]="statusClass(kpi.status)">
+            {{ kpi.status }}
+          </span>
+        </div>
+
+        <!-- Metrics -->
+        <dl class="mt-3 grid grid-cols-2 gap-2">
+          <div class="rounded-lg bg-dt-50 p-2.5">
+            <dt class="text-xs text-slate-500">Actual</dt>
+            <dd class="mt-0.5 text-base font-semibold leading-5 text-slate-900 break-words">{{ kpi.actualValue ?? '—' }}</dd>
+          </div>
+          <div class="rounded-lg bg-slate-50 p-2.5">
+            <dt class="text-xs text-slate-500">Target</dt>
+            <dd class="mt-0.5 text-base font-semibold leading-5 text-slate-800 break-words">{{ kpi.target }}</dd>
+          </div>
+        </dl>
+
+        <!-- Progress -->
+        <div *ngIf="hasNumericTarget(kpi)" class="mt-3">
+          <div class="mb-1 flex items-center justify-between text-xs">
+            <span class="font-medium text-slate-500">Progress vs target</span>
+            <span class="font-semibold text-slate-700">
+              {{ progressPercentage(kpi) | number:'1.0-0' }}%
+            </span>
+          </div>
+          <div class="h-1.5 overflow-hidden rounded-full bg-slate-200">
+            <div class="h-full rounded-full transition-all duration-500"
+              [ngClass]="kpi.status === 'APPROVED' ? 'bg-emerald-500' : kpi.status === 'REWORK_REQUIRED' ? 'bg-orange-400' : 'bg-dt-500'"
+              [style.width.%]="progressPercentage(kpi)">
+            </div>
+          </div>
+        </div>
+
+        <!-- Meta row -->
+        <div class="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs">
+          <span class="truncate pr-3 text-slate-500">{{ kpi.categoryName }}</span>
+          <span class="font-semibold text-slate-600">{{ kpi.weight }}%</span>
+        </div>
+
+        <!-- Manager rating -->
+        <div *ngIf="kpi.rating != null"
+          class="mt-2 flex items-center gap-2 rounded-lg border border-amber-100 bg-amber-50 px-2.5 py-1.5 text-xs">
+          <span class="font-semibold text-amber-700">Manager:</span>
+          <span class="font-bold text-amber-900">{{ kpi.rating }}/5</span>
+          <span *ngIf="kpi.reviewerComments" class="min-w-0 flex-1 truncate text-amber-700">{{ kpi.reviewerComments }}</span>
+        </div>
+
+        <!-- Action -->
+        <p *ngIf="evidenceLoading[kpi.id]" role="status" class="mt-2 text-xs text-slate-600">Loading evidence…</p>
+        <p *ngIf="evidenceErrors[kpi.id]" role="alert" class="mt-2 text-xs text-rose-800">{{ evidenceErrors[kpi.id] }}</p>
+        <div class="mt-3 border-t border-slate-100 pt-2">
+          <button *ngIf="canEdit(kpi)" (click)="openAssess(kpi)"
+            class="w-full rounded-lg py-1.5 text-xs font-semibold transition"
+            [ngClass]="canAssess(kpi)
+              ? kpi.status === 'REWORK_REQUIRED'
+                ? 'bg-orange-100 text-orange-700 hover:bg-orange-200'
+                : 'bg-dt-600 text-white hover:bg-dt-700'
+              : 'bg-dt-100 text-dt-700 hover:bg-dt-200'">
+            {{ canAssess(kpi) ? (kpi.status === 'REWORK_REQUIRED' ? 'Rework & Resubmit' : 'Submit Assessment') : 'Edit' }}
+          </button>
+          <p *ngIf="!canEdit(kpi)" class="py-1.5 text-center text-xs text-slate-400">
+            {{ kpi.status === 'APPROVED' ? 'Approved' : 'View Only' }}
+          </p>
+        </div>
+      </article>
+    </div>
+
+    <div *ngIf="!loadError && filteredKpis.length === 0 && selectedCycleCode" class="text-center py-16 text-slate-400 bg-white rounded-xl shadow">
+      <p class="text-4xl mb-3">📋</p>
+      <p class="font-medium">{{ allMyKpis.length === 0 ? 'No KPIs assigned to you for this cycle.' : 'No KPIs match your filters.' }}</p>
+      <p *ngIf="allMyKpis.length === 0" class="mt-2 text-sm">Contact your manager to check your role and organization assignments and ask an administrator to generate your KPIs.</p>
+      <button *ngIf="allMyKpis.length === 0" (click)="loadMyKpis()" class="mt-3 text-dt-700 underline font-semibold">Refresh KPIs</button>
+      <button *ngIf="searchTerm || statusFilter !== 'All' || categoryFilter !== 'All'"
+        (click)="clearFilters()" class="text-xs text-dt-700 underline font-semibold mt-3">↩ Clear filters</button>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- Self-Assessment Modal                                                      -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showModal"
+  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+  (click)="closeModal()">
+
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+    [appAccessibleModal]="'Self-assessment: ' + (selectedKpi?.kpiName || '')"
+    (dismiss)="closeModal()"
+    (click)="$event.stopPropagation()">
+
+    <!-- Modal header -->
+    <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-dt-700">Self-Assessment</p>
+        <h2 class="text-lg font-bold text-slate-900">{{ selectedKpi?.kpiName }}</h2>
+      </div>
+      <button type="button" aria-label="Close dialog" (click)="closeModal()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+    </div>
+
+    <!-- Unsent draft recovered from a previous visit. Shown as a choice rather
+         than applied automatically, so nothing on screen changes unasked. -->
+    <div *ngIf="pendingDraft" role="alert"
+      class="mx-6 mt-4 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3">
+      <div class="flex items-start gap-3">
+        <span aria-hidden="true" class="text-lg leading-none">💾</span>
+        <div class="flex-1">
+          <p class="text-sm font-semibold text-amber-900">Unsent draft found</p>
+          <p class="text-xs text-amber-800 mt-0.5">
+            You have unsaved edits from {{ pendingDraft.savedAt | date:'d MMM, HH:mm' }} that were never submitted.
+          </p>
+          <div class="flex flex-wrap gap-2 mt-2">
+            <button type="button" (click)="restoreDraft()"
+              class="px-3 py-1.5 rounded-md bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold transition">
+              Restore draft
+            </button>
+            <button type="button" (click)="discardDraft()"
+              class="px-3 py-1.5 rounded-md border border-amber-400 text-amber-800 hover:bg-amber-100 text-xs font-medium transition">
+              Discard
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI Details Bar -->
+    <div *ngIf="selectedKpi" class="px-6 pt-4 flex flex-wrap gap-4 text-xs">
+      <div class="bg-slate-50 rounded px-3 py-1.5">
+        <span class="text-slate-400">Category:</span>
+        <span class="ml-1 font-semibold text-slate-700">{{ selectedKpi.categoryName }}</span>
+      </div>
+      <div class="bg-slate-50 rounded px-3 py-1.5">
+        <span class="text-slate-400">Weight:</span>
+        <span class="ml-1 font-semibold text-slate-700">{{ selectedKpi.weight }}%</span>
+      </div>
+      <div class="bg-slate-50 rounded px-3 py-1.5">
+        <span class="text-slate-400">Target:</span>
+        <span class="ml-1 font-semibold text-slate-700">{{ selectedKpi.target }}</span>
+      </div>
+      <div class="bg-slate-50 rounded px-3 py-1.5">
+        <span class="text-slate-400">Frequency:</span>
+        <span class="ml-1 font-semibold text-slate-700">{{ selectedKpi.frequency }}</span>
+      </div>
+    </div>
+
+    <!-- Modal body -->
+    <div class="px-6 py-5 space-y-4">
+
+      <!-- Form message -->
+      <div *ngIf="formMsg" class="rounded-lg px-4 py-2.5 text-sm font-medium border"
+        [class.bg-rose-50]="formMsgIsError"   [class.text-rose-800]="formMsgIsError"   [class.border-rose-300]="formMsgIsError"
+        [class.bg-green-50]="!formMsgIsError" [class.text-green-800]="!formMsgIsError" [class.border-green-300]="!formMsgIsError">
+        {{ formMsg }}
+      </div>
+
+      <!-- Actual Value -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">
+          Actual Value <span class="text-rose-500 font-bold">*</span>
+          <span class="ml-1 font-normal text-slate-400">(Required — must be ≥ 0)</span>
+        </label>
+        <input [(ngModel)]="assessForm.actualValue" (ngModelChange)="onAssessmentInput()" type="number" step="any"
+          class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:outline-none transition"
+          [ngClass]="assessForm.actualValue !== null && !isActualValueValid()
+            ? 'border-rose-400 focus:ring-rose-300 bg-rose-50'
+            : isActualValueValid() ? 'border-emerald-400 focus:ring-emerald-300' : 'border-slate-300 focus:ring-dt-400'"
+          placeholder="Enter achieved value…" />
+        <p *ngIf="assessForm.actualValue !== null && !isActualValueValid()"
+          class="text-xs text-rose-600 mt-1 font-medium">❌ Value must be 0 or greater</p>
+        <p *ngIf="isActualValueValid()" class="text-xs text-emerald-600 mt-1">✅ Valid</p>
+
+        <!-- Automated actual. Offered, never written on the employee's behalf:
+             what they submit has to be a number they chose. -->
+        <div class="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+          <div class="flex items-center justify-between gap-3">
+            <p class="text-xs font-semibold text-slate-600">
+              <span aria-hidden="true">🔗</span> Measured automatically
+            </p>
+            <button type="button" (click)="collectMetric()" [disabled]="collectingMetric"
+              class="px-2.5 py-1 rounded-md border border-slate-300 bg-white hover:bg-slate-100
+                     disabled:opacity-50 disabled:cursor-not-allowed text-xs font-medium text-slate-700 transition">
+              {{ collectingMetric ? 'Checking…' : 'Fetch value' }}
+            </button>
+          </div>
+
+          <!-- A collected number, ready to accept -->
+          <div *ngIf="suggestedValue !== null" class="mt-2 flex flex-wrap items-center gap-2">
+            <span class="text-lg font-semibold text-slate-900">{{ suggestedValue }}</span>
+            <span class="text-xs text-slate-500">{{ suggestedSummary }}</span>
+
+            <button *ngIf="!suggestionAlreadyApplied" type="button" (click)="applySuggestion()"
+              class="px-2.5 py-1 rounded-md bg-dt-600 hover:bg-dt-700 text-white text-xs font-semibold transition">
+              Use this value
+            </button>
+            <span *ngIf="suggestionAlreadyApplied" class="text-xs font-medium text-emerald-700">
+              ✅ Applied
+            </span>
+
+            <a *ngIf="suggestedUrl" [href]="suggestedUrl" target="_blank" rel="noopener noreferrer"
+              class="text-xs text-dt-700 underline hover:text-dt-800">
+              Verify
+            </a>
+          </div>
+
+          <!-- Everything that is not a number: each says what to do next -->
+          <p *ngIf="metricResult && metricResult.outcome !== 'COLLECTED'"
+            class="mt-2 text-xs"
+            [ngClass]="metricResult.outcome === 'FAILED' ? 'text-rose-600' : 'text-slate-500'">
+            {{ metricResult.message }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Comments -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">
+          Comments <span class="text-amber-500 font-normal text-xs ml-1">(Recommended)</span>
+        </label>
+        <textarea [(ngModel)]="assessForm.comments" (ngModelChange)="onAssessmentInput()" rows="2"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none resize-none"
+          placeholder="Describe what you achieved and how…"></textarea>
+        <p class="text-xs text-slate-400 mt-1">{{ assessForm.comments.length }} chars</p>
+      </div>
+
+      <!-- Justification -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">
+          Justification
+          <span *ngIf="selectedKpi?.status === 'REWORK_REQUIRED'" class="text-amber-500 font-normal text-xs ml-1">(Recommended for rework)</span>
+          <span *ngIf="selectedKpi?.status !== 'REWORK_REQUIRED'" class="text-slate-400 font-normal text-xs ml-1">(Optional)</span>
+        </label>
+        <textarea [(ngModel)]="assessForm.justification" (ngModelChange)="onAssessmentInput()" rows="2"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none resize-none"
+          [placeholder]="selectedKpi?.status === 'REWORK_REQUIRED' ? 'Explain what changed since rework feedback…' : 'Explain any deviation from target…'"></textarea>
+        <p class="text-xs text-slate-400 mt-1">{{ assessForm.justification.length }} chars</p>
+      </div>
+
+      <!-- Evidence file upload -->
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">
+          Evidence Attachment
+          <span *ngIf="(selectedKpi?.weight ?? 0) >= 20" class="text-amber-500 font-normal text-xs ml-1">(Recommended ≥20% weight)</span>
+          <span *ngIf="(selectedKpi?.weight ?? 0) < 20" class="text-slate-400 font-normal text-xs ml-1">(Optional — PDF, JPG, PNG)</span>
+        </label>
+        <input type="file" [accept]="acceptedEvidenceTypes" (change)="onEvidenceFileSelected($event)"
+          class="block w-full text-sm text-slate-600 file:mr-3 file:rounded-md file:border-0 file:bg-dt-50 file:px-3 file:py-2 file:text-xs file:font-semibold file:text-dt-700 hover:file:bg-dt-100" />
+        <p *ngIf="assessForm.evidenceFile" class="mt-1 text-xs text-emerald-600 font-medium">
+          ✅ {{ assessForm.evidenceFile.name }} ({{ (assessForm.evidenceFile.size / 1024).toFixed(1) }} KB)
+        </p>
+      </div>
+
+      <!-- Submission Readiness Checklist -->
+      <div class="rounded-lg border border-dt-100 bg-dt-50/40 px-4 py-3 space-y-1.5">
+        <p class="text-xs font-semibold text-slate-600 mb-2">Submission Readiness:</p>
+        <div class="text-xs" [ngClass]="isActualValueValid() ? 'text-emerald-700 font-semibold' : 'text-rose-700 font-semibold'">
+          <span>{{ isActualValueValid() ? '✅' : '❌' }}</span>
+          Actual Value: {{ isActualValueValid() ? 'Valid' : 'Required — please enter a value ≥ 0' }}
+        </div>
+        <div class="text-xs" [ngClass]="assessForm.comments.trim() ? 'text-emerald-700' : 'text-amber-600'">
+          <span>{{ assessForm.comments.trim() ? '✅' : '⚠️' }}</span>
+          Comments: {{ assessForm.comments.trim() ? 'Added' : 'Recommended for context' }}
+        </div>
+        <div *ngIf="selectedKpi?.status === 'REWORK_REQUIRED'"
+          class="text-xs" [ngClass]="assessForm.justification.trim() ? 'text-emerald-700' : 'text-amber-600'">
+          <span>{{ assessForm.justification.trim() ? '✅' : '⚠️' }}</span>
+          Justification: {{ assessForm.justification.trim() ? 'Added' : 'Recommended for rework' }}
+        </div>
+        <div *ngIf="(selectedKpi?.weight ?? 0) >= 20"
+          class="text-xs" [ngClass]="assessForm.evidenceFile ? 'text-emerald-700' : 'text-amber-600'">
+          <span>{{ assessForm.evidenceFile ? '✅' : '⚠️' }}</span>
+          Evidence: {{ assessForm.evidenceFile ? 'Attached' : 'Recommended (high-weight KPI)' }}
+        </div>
+      </div>
+
+      <!-- Manager feedback (read-only if present) -->
+      <div *ngIf="selectedKpi?.reviewerComments" class="rounded-lg bg-amber-50 border border-amber-200 px-4 py-3">
+        <p class="text-xs font-semibold text-amber-700 mb-1">Manager Feedback</p>
+        <p class="text-sm text-amber-900">{{ selectedKpi?.reviewerComments }}</p>
+        <p *ngIf="selectedKpi?.rating != null" class="mt-1 text-xs text-amber-700">
+          Rating: <strong>{{ ratingDisplay(selectedKpi?.rating) }}</strong>
+        </p>
+      </div>
+
+    </div>
+
+    <!-- Modal footer -->
+    <div class="px-6 py-4 border-t border-slate-200 flex items-center justify-between gap-3">
+      <button (click)="closeModal()"
+        class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition rounded-lg border border-slate-200 hover:border-slate-300">
+        ✕ Cancel
+      </button>
+
+      <!-- Reassurance that closing the dialog will not lose the text. -->
+      <p *ngIf="draftSavedAt" aria-live="polite"
+        class="flex-1 text-xs text-slate-500 flex items-center gap-1.5">
+        <span aria-hidden="true">💾</span>
+        Draft saved {{ draftSavedAt | date:'HH:mm:ss' }}
+      </p>
+
+      <button (click)="submitAssessment()"
+        [disabled]="submitting || confirmPopup.visible || !isActualValueValid()"
+        class="flex items-center gap-2 bg-dt-600 hover:bg-dt-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg text-sm font-semibold transition">
+        <span>{{ submitting ? '⌛' : '↑' }}</span>
+        {{ submitting ? 'Submitting…' : 'Submit to Manager' }}
+      </button>
+    </div>
+
+  </div>
+</div>
+
+<!-- Action Confirmation Popup -->
+<div *ngIf="confirmPopup.visible"
+  class="fixed inset-0 bg-black/40 flex items-center justify-center z-[60] p-4"
+  (click)="cancelConfirmPopup()">
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-md"
+    [appAccessibleModal]="confirmPopup.title"
+    (dismiss)="cancelConfirmPopup()"
+    (click)="$event.stopPropagation()">
+    <div class="px-5 py-4 border-b border-slate-200">
+      <h3 class="text-base font-semibold text-slate-900">{{ confirmPopup.title }}</h3>
+      <p class="mt-1 text-sm text-slate-600">{{ confirmPopup.message }}</p>
+    </div>
+    <div class="px-5 py-4 flex justify-end gap-2">
+      <button (click)="cancelConfirmPopup()"
+        class="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+        Cancel
+      </button>
+      <button (click)="confirmPopupAction()"
+        class="rounded-lg bg-dt-600 hover:bg-dt-700 px-4 py-2 text-sm font-semibold text-white">
+        {{ confirmPopup.actionLabel }}
+      </button>
+    </div>
+  </div>
+</div>

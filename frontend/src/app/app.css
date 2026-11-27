@@ -1,0 +1,114 @@
+/* ==================== MAGENTA THEME STYLES ==================== */
+
+/* Primary accent color */
+:host {
+  --magenta-primary: #E20074;
+  --magenta-dark: #C6006A;
+  --magenta-light: #F67EC0;
+  --magenta-50: #FEF2F7;
+  --magenta-100: #FDE8F0;
+  --magenta-200: #FCC7E1;
+}
+
+/* Active Link Styling */
+.active-link {
+  background: var(--magenta-primary);
+  color: #ffffff !important;
+  box-shadow: 0 8px 16px rgba(226, 0, 116, 0.24);
+}
+
+/* Main Content Area */
+main {
+  min-height: calc(100vh - 48px);
+  background: linear-gradient(135deg, #fafafa 0%, #f3f0f5 100%);
+}
+
+/* Header Magenta Gradient */
+header {
+  background: linear-gradient(90deg, var(--magenta-primary) 0%, var(--magenta-dark) 100%);
+  box-shadow: 0 4px 12px rgba(226, 0, 116, 0.25);
+}
+
+/* Menu Dropdown Magenta Border */
+.menu-dropdown {
+  border: 2px solid var(--magenta-primary);
+  border-top: 4px solid var(--magenta-primary);
+}
+
+nav [data-menu-root] > .absolute {
+  max-height: calc(100dvh - 5rem);
+  overflow-y: auto;
+}
+
+/* Hover Effects with Magenta */
+a:hover, button:hover {
+  transition: all 0.3s ease;
+}
+
+/* Module 3 KPI Dashboard Styling */
+.kpi-dashboard {
+  background: linear-gradient(135deg, var(--magenta-50) 0%, #ffffff 100%);
+  border-left: 4px solid var(--magenta-primary);
+}
+
+/* KPI Card Styling */
+.kpi-card {
+  border: 1px solid var(--magenta-200);
+  border-top: 3px solid var(--magenta-primary);
+  background: linear-gradient(180deg, var(--magenta-50) 0%, #ffffff 100%);
+  box-shadow: 0 4px 6px rgba(226, 0, 116, 0.1);
+  transition: all 0.3s ease;
+}
+
+.kpi-card:hover {
+  box-shadow: 0 8px 16px rgba(226, 0, 116, 0.2);
+  transform: translateY(-2px);
+}
+
+/* Performance Menu Highlight */
+.performance-menu {
+  background: linear-gradient(90deg, var(--magenta-100) 0%, var(--magenta-50) 100%);
+}
+
+/* Button Magenta Styling */
+.btn-magenta {
+  background: var(--magenta-primary);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.btn-magenta:hover {
+  background: var(--magenta-dark);
+  box-shadow: 0 4px 12px rgba(226, 0, 116, 0.3);
+}
+
+.btn-magenta:active {
+  transform: scale(0.98);
+}
+
+/* Text Magenta Styling */
+.text-magenta-primary {
+  color: var(--magenta-primary);
+  font-weight: 600;
+}
+
+/* Divider with Magenta */
+.divider-magenta {
+  border-top: 2px solid var(--magenta-primary);
+  margin: 12px 0;
+}
+
+/* Badge Magenta */
+.badge-magenta {
+  background: var(--magenta-primary);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}

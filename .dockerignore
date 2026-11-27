@@ -1,0 +1,27 @@
+# Keep build context small and avoid copying anything secret or machine-local.
+
+.git
+.gitignore
+.idea
+*.iml
+
+# Rebuilt inside the image; copying them in would also risk shipping a stale jar
+# or a node_modules built for the host's platform.
+target/
+frontend/node_modules/
+frontend/dist/
+frontend/.angular/
+
+# Generated at runtime.
+logs/
+uploads/
+
+# Documentation and helper scripts play no part in the build.
+*.md
+tools/
+*.sql
+
+# Never bake local environment values into an image.
+.env
+.env.*
+

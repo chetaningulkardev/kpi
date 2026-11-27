@@ -1,0 +1,60 @@
+# Production profile.
+#
+# Activate with: SPRING_PROFILES_ACTIVE=prod
+#
+# Every credential here comes from the environment with no fallback, so a
+# missing value fails startup rather than silently running on a default.
+
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_MAX:20}
+      minimum-idle: ${DB_POOL_MIN:5}
+
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  flyway:
+    # Baselining exists to adopt a pre-Flyway database once. A production
+    # database should already be under Flyway control, and leaving this on would
+    # let a genuinely empty or wrong database be stamped as migrated instead of
+    # failing loudly.
+    baseline-on-migrate: false
+
+server:
+  error:
+    # Never disclose internals. ApiExceptionHandler already returns an opaque
+    # message for 5xx; this closes the ?trace=true route as well.
+    include-stacktrace: never
+    include-message: never
+  # Behind a reverse proxy, honour X-Forwarded-* so redirects and the client
+  # address used for rate limiting are correct.
+  forward-headers-strategy: framework
+
+logging:
+  level:
+    root: WARN
+    com.example.kpi: INFO
+    org.springframework.security: WARN
+
+app:
+  mail:
+    enabled: ${MAIL_ENABLED:true}
+  evidence:
+    upload-dir: ${EVIDENCE_UPLOAD_DIR:/var/lib/kpi/evidence}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: when_authorized
+

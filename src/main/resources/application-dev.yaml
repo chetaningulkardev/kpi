@@ -1,0 +1,36 @@
+# Development profile.
+#
+# Activate with: --spring.profiles.active=dev  (or SPRING_PROFILES_ACTIVE=dev)
+#
+# Convenience settings that must never reach a deployed environment live here
+# rather than in application.yaml, so the base config stays safe by default.
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://127.0.0.1:5432/kpi}
+    username: ${DB_USERNAME:kpi_user}
+    password: ${DB_PASSWORD:kpi_password}
+
+  jpa:
+    # Handy locally when working out why a query is slow.
+    show-sql: false
+
+server:
+  error:
+    # Stack traces on demand via ?trace=true. Disabled entirely in prod, where
+    # they would disclose internal structure to anyone who asks.
+    include-stacktrace: on_param
+    include-message: always
+
+logging:
+  level:
+    com.example.kpi: DEBUG
+
+app:
+  mail:
+    enabled: false
+  security:
+    login:
+      # Loose enough not to get in the way while testing the login screen.
+      max-attempts: 50
+      window-seconds: 60

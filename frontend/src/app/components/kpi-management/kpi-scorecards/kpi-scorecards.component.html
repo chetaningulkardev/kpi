@@ -1,0 +1,289 @@
+<section class="max-w-6xl mx-auto px-4 py-8 space-y-6">
+
+  <!-- Header -->
+  <div class="flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <p class="text-xs font-semibold uppercase tracking-[0.2em] text-dt-700">Manager Tools</p>
+      <h1 class="mt-1 text-2xl font-bold text-slate-900">Scorecards &amp; Calibration</h1>
+      <p class="mt-1 text-sm text-slate-500">
+        Review weighted scores for the cycle and normalise ratings across the team.
+      </p>
+    </div>
+    <div class="flex flex-wrap items-center gap-2">
+      <button (click)="generate()" [disabled]="generating || !selectedCycleCode"
+        class="rounded-lg bg-dt-600 hover:bg-dt-700 disabled:opacity-50 px-3 py-2 text-sm font-semibold text-white transition">
+        {{ generating ? '⏳ Generating…' : '⚙ Generate' }}
+      </button>
+      <button (click)="exportCsv()" [disabled]="exporting || !selectedCycleCode"
+        class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-blue-400 hover:text-blue-700 disabled:opacity-50 transition">
+        {{ exporting ? '⏳ Exporting…' : '↓ Export CSV' }}
+      </button>
+      <button (click)="loadScorecards()" [disabled]="loading || !selectedCycleCode"
+        class="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold text-slate-700 hover:border-dt-400 hover:text-dt-700 disabled:opacity-50 transition">
+        ↻ Refresh
+      </button>
+    </div>
+  </div>
+
+  <!-- Flash message -->
+  <div *ngIf="pageMsg" class="rounded-lg px-4 py-3 text-sm font-medium border"
+    [class.bg-green-50]="!pageMsgIsError" [class.text-green-800]="!pageMsgIsError" [class.border-green-300]="!pageMsgIsError"
+    [class.bg-rose-50]="pageMsgIsError"   [class.text-rose-800]="pageMsgIsError"   [class.border-rose-300]="pageMsgIsError">
+    {{ pageMsg }}
+  </div>
+
+  <!-- Filters -->
+  <p *ngIf="cyclesLoading" role="status">Loading review cycles…</p>
+  <p *ngIf="cyclesError" role="alert" class="text-rose-800">{{ cyclesError }}
+    <button (click)="loadCycles()" class="underline">Retry</button>
+  </p>
+  <p *ngIf="!cyclesLoading && !cyclesError && cycles.length === 0" class="text-slate-600">
+    No review cycles found. Ask your administrator to create and open a review cycle, then
+    <button (click)="loadCycles()" class="text-dt-700 underline">refresh cycles</button>.
+  </p>
+  <div class="bg-white rounded-lg border p-4 space-y-3">
+    <div class="grid gap-3 md:grid-cols-4">
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Review Cycle</label>
+        <select [(ngModel)]="selectedCycleCode" (ngModelChange)="onCycleChange()" [disabled]="saving || generating"
+          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-dt-300 outline-none">
+          <option *ngFor="let c of cycles" [value]="c.code">{{ c.name }} ({{ c.code }})</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Search</label>
+        <input [(ngModel)]="searchTerm" (ngModelChange)="applyFilters()"
+          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-dt-300 outline-none"
+          placeholder="Employee, role, or level…" />
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+        <select [(ngModel)]="statusFilter" (ngModelChange)="applyFilters()"
+          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-dt-300 outline-none">
+          <option value="All">All Status</option>
+          <option *ngFor="let s of statusOptions" [value]="s">{{ s }}</option>
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Sort By</label>
+        <select [(ngModel)]="sortBy" (ngModelChange)="applyFilters()"
+          class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:ring-2 focus:ring-dt-300 outline-none">
+          <option value="score">Score (high → low)</option>
+          <option value="name">Employee name</option>
+        </select>
+      </div>
+    </div>
+    <button *ngIf="searchTerm || statusFilter !== 'All'" (click)="clearFilters()"
+      class="text-xs text-dt-700 hover:text-dt-900 font-semibold underline">
+      ✕ Clear filters
+    </button>
+  </div>
+
+  <!-- Loading -->
+  <div *ngIf="loading" class="space-y-4">
+    <app-skeleton type="bar" [count]="3"></app-skeleton>
+    <app-skeleton type="table" [count]="6"></app-skeleton>
+  </div>
+
+  <!-- Summary -->
+  <p *ngIf="summaryLoading" role="status">Loading scorecard summary…</p>
+  <p *ngIf="summaryError" role="alert" class="text-rose-800">{{ summaryError }}
+    <button (click)="loadSummary()" class="underline">Retry summary</button>
+  </p>
+  <div *ngIf="!loading && summary" class="grid grid-cols-1 md:grid-cols-4 gap-4">
+    <div class="bg-white rounded-xl border shadow-sm p-4">
+      <p class="text-xs text-slate-500 font-semibold uppercase tracking-wide">Employees</p>
+      <p class="text-3xl font-bold text-slate-800 mt-1">{{ summary.totalEmployees }}</p>
+    </div>
+    <div class="bg-white rounded-xl border shadow-sm p-4">
+      <p class="text-xs text-slate-500 font-semibold uppercase tracking-wide">Average Score</p>
+      <p class="text-3xl font-bold text-dt-700 mt-1">{{ summary.averageScore | number:'1.2-2' }}</p>
+      <p class="text-xs text-slate-400 mt-1">out of 5.00</p>
+    </div>
+    <div class="bg-white rounded-xl border shadow-sm p-4">
+      <p class="text-xs text-slate-500 font-semibold uppercase tracking-wide">Range</p>
+      <p class="text-2xl font-bold text-slate-800 mt-1">
+        {{ summary.minScore != null ? (summary.minScore | number:'1.1-1') : '—' }}
+        <span class="text-slate-400 text-lg">→</span>
+        {{ summary.maxScore != null ? (summary.maxScore | number:'1.1-1') : '—' }}
+      </p>
+    </div>
+    <div class="bg-white rounded-xl border shadow-sm p-4">
+      <p class="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-2">Status</p>
+      <div class="space-y-1">
+        <div *ngFor="let key of statusKeys; trackBy: trackByKey" class="flex justify-between text-xs">
+          <span class="text-slate-600">{{ key }}</span>
+          <span class="font-bold text-slate-800">{{ summary.statusDistribution[key] }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Rating distribution -->
+  <div *ngIf="!loading && summary && ratingKeys.length > 0" class="bg-white rounded-xl border shadow-sm p-4">
+    <p class="text-xs text-slate-500 font-semibold uppercase tracking-wide mb-3">Rating Distribution</p>
+    <div class="flex items-end gap-3 h-24">
+      <div *ngFor="let key of ratingKeys; trackBy: trackByKey" class="flex-1 flex flex-col items-center gap-1">
+        <span class="text-xs font-bold text-slate-700">{{ summary.ratingDistribution[key] }}</span>
+        <div class="w-full rounded-t bg-dt-500 transition-all"
+          [style.height.px]="(summary.ratingDistribution[key] / (summary.totalEmployees || 1)) * 70 + 3"></div>
+        <span class="text-xs text-slate-500">{{ key }}</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div *ngIf="!loading && selectedCycleCode" class="bg-white rounded-xl shadow overflow-x-auto">
+    <table class="min-w-full text-sm" *ngIf="filteredScorecards.length > 0">
+      <thead class="bg-slate-50 border-b border-slate-200">
+        <tr class="text-left text-xs uppercase text-slate-500 tracking-wide">
+          <th class="px-4 py-3">Employee</th>
+          <th class="px-4 py-3">Role</th>
+          <th class="px-4 py-3">Level</th>
+          <th class="px-4 py-3 text-right">Overall</th>
+          <th class="px-4 py-3">Categories</th>
+          <th class="px-4 py-3">Status</th>
+          <th class="px-4 py-3 text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-slate-100">
+        <tr *ngFor="let card of filteredScorecards; trackBy: trackByScorecardId" class="hover:bg-dt-50 transition-colors">
+          <td class="px-4 py-3 font-semibold text-slate-900">{{ card.employeeName }}</td>
+          <td class="px-4 py-3 text-slate-600 text-xs">{{ card.role || '—' }}</td>
+          <td class="px-4 py-3 text-slate-600 text-xs">{{ card.employeeLevel || '—' }}</td>
+          <td class="px-4 py-3 text-right">
+            <span class="text-base font-bold" [ngClass]="scoreClass(card.overallScore)">
+              {{ card.overallScore != null ? (card.overallScore | number:'1.2-2') : '—' }}
+            </span>
+            <span class="text-xs text-slate-400"> / {{ card.maxScore ?? 5 }}</span>
+          </td>
+          <td class="px-4 py-3">
+            <div class="flex flex-wrap gap-1">
+              <span *ngFor="let c of categoryEntries(card); trackBy: trackByName"
+                class="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                {{ c.name }}: {{ c.score | number:'1.1-1' }}
+              </span>
+              <span *ngIf="categoryEntries(card).length === 0" class="text-xs text-slate-400">—</span>
+            </div>
+          </td>
+          <td class="px-4 py-3">
+            <span class="rounded-full px-2.5 py-0.5 text-xs font-semibold" [ngClass]="statusClass(card.status)">
+              {{ card.status }}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-right">
+            <button (click)="openCalibration(card)"
+              class="text-dt-700 hover:text-dt-900 text-xs font-semibold transition">⚖ Calibrate</button>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div *ngIf="filteredScorecards.length === 0" class="text-center py-16 text-slate-400">
+      <p class="text-4xl mb-3">📊</p>
+      <p class="font-medium">
+        {{ loadFailed ? 'Scorecards could not be loaded. Use Refresh to retry.' : scorecards.length === 0 ? 'No scorecards for this cycle yet.' : 'No scorecards match your filters.' }}
+      </p>
+      <p *ngIf="!loadFailed" class="text-sm mt-1">
+        {{ scorecards.length === 0 ? 'Use “Generate” to build them from approved KPIs.' : 'Adjust your search to find scorecards.' }}
+      </p>
+      <button *ngIf="!loadFailed && scorecards.length === 0" (click)="generate()" [disabled]="generating"
+        class="mt-3 text-dt-700 underline font-semibold">Generate scorecards from approved KPIs</button>
+      <button *ngIf="!loadFailed && scorecards.length > 0" (click)="clearFilters()"
+        class="mt-3 text-dt-700 underline font-semibold">Clear filters</button>
+    </div>
+  </div>
+
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<!-- Calibration Modal                                                          -->
+<!-- ══════════════════════════════════════════════════════════════════════════ -->
+<div *ngIf="showModal"
+  class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4"
+  (click)="closeModal()">
+
+  <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+    appAccessibleModal="Scorecard details"
+    (dismiss)="closeModal()"
+    (click)="$event.stopPropagation()">
+
+    <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+      <div>
+        <p class="text-xs font-semibold uppercase tracking-wide text-dt-700">Calibration</p>
+        <h2 class="text-lg font-bold text-slate-900">{{ selected?.employeeName }}</h2>
+        <p class="text-xs text-slate-400 mt-0.5">{{ selected?.role }} · {{ selected?.employeeLevel }}</p>
+      </div>
+      <button type="button" aria-label="Close dialog" (click)="closeModal()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+    </div>
+
+    <div class="px-6 py-5 space-y-4">
+
+      <div *ngIf="formMsg" class="rounded-lg px-4 py-2.5 text-sm font-medium border"
+        [class.bg-rose-50]="formMsgIsError"   [class.text-rose-800]="formMsgIsError"   [class.border-rose-300]="formMsgIsError"
+        [class.bg-green-50]="!formMsgIsError" [class.text-green-800]="!formMsgIsError" [class.border-green-300]="!formMsgIsError">
+        {{ formMsg }}
+      </div>
+
+      <!-- Computed score reference -->
+      <div *ngIf="selected" class="bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+        <p class="text-xs font-semibold text-blue-700 mb-1">Computed from approved KPIs</p>
+        <div class="flex flex-wrap gap-2">
+          <span *ngFor="let c of categoryEntries(selected); trackBy: trackByName"
+            class="rounded-full bg-white border border-blue-200 px-2 py-0.5 text-xs text-blue-800">
+            {{ c.name }}: {{ c.score | number:'1.2-2' }}
+          </span>
+          <span *ngIf="categoryEntries(selected).length === 0" class="text-xs text-blue-700">
+            No category breakdown available.
+          </span>
+        </div>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">
+          Calibrated Overall Score
+          <span class="ml-1 font-normal text-slate-400">(0–5, leave as-is to keep the computed value)</span>
+        </label>
+        <input type="number" min="0" max="5" step="0.01" [(ngModel)]="calibrationForm.overallScore"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none" />
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+        <select [(ngModel)]="calibrationForm.status"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none">
+          <option *ngFor="let s of statusOptions" [value]="s">{{ s }}</option>
+        </select>
+        <p *ngIf="calibrationForm.status === 'PUBLISHED'" class="mt-1 text-xs text-amber-700">
+          Publishing makes this scorecard visible to the employee.
+        </p>
+      </div>
+
+      <div>
+        <label class="block text-xs font-semibold text-slate-600 mb-1">
+          Calibration Notes <span class="text-rose-500">*</span>
+        </label>
+        <textarea [(ngModel)]="calibrationForm.notes" rows="3"
+          class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-dt-400 focus:outline-none resize-none"
+          placeholder="Explain the adjustment and the reasoning behind it…"></textarea>
+      </div>
+
+      <div *ngIf="selected?.calibratedByName" class="text-xs text-slate-500">
+        Last calibrated by <strong>{{ selected?.calibratedByName }}</strong>.
+      </div>
+
+    </div>
+
+    <div class="px-6 py-4 border-t border-slate-200 flex justify-end gap-3">
+      <button (click)="closeModal()"
+        class="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 transition">
+        Cancel
+      </button>
+      <button (click)="saveCalibration()" [disabled]="saving"
+        class="bg-dt-600 hover:bg-dt-700 disabled:opacity-50 disabled:cursor-not-allowed text-white px-5 py-2 rounded-lg text-sm font-semibold transition">
+        {{ saving ? '⏳ Saving…' : '⚖ Save Calibration' }}
+      </button>
+    </div>
+
+  </div>
+</div>

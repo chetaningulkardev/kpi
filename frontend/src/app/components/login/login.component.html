@@ -1,0 +1,150 @@
+<div class="min-h-screen bg-slate-100 py-8 px-4 sm:px-6 lg:px-8 login-shell">
+  <div class="mx-auto max-w-6xl">
+    <div class="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl shadow-slate-300/30">
+      <div class="grid min-h-[680px] lg:grid-cols-2">
+        <!-- Left hero panel -->
+        <aside class="login-aside hidden lg:flex flex-col justify-between p-10 text-white relative overflow-hidden">
+
+          <!-- Hero background image + dark overlay -->
+          <div class="login-aside-bg absolute inset-0 z-0"></div>
+          <div class="absolute inset-0 z-0 bg-gradient-to-br from-slate-900/80 via-dt-800/70 to-fuchsia-950/60"></div>
+
+          <!-- Top content -->
+          <div class="relative z-10">
+            <span class="inline-block rounded-full border border-white/30 bg-white/10 px-3 py-1 text-[10px] font-bold uppercase tracking-[0.2em] text-white/80 backdrop-blur-sm">
+              Enterprise Performance Platform
+            </span>
+            <h1 class="mt-5 text-4xl font-extrabold leading-tight tracking-tight drop-shadow-md">
+              KPI Management
+            </h1>
+            <p class="mt-3 max-w-sm text-sm leading-relaxed text-white/85">
+              Centralized KPI planning, execution, and review workflows — built for delivery teams, managers, and leadership.
+            </p>
+
+            <div class="mt-8 grid gap-3 sm:grid-cols-3">
+              <div class="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white/90 backdrop-blur-sm">
+                Plan goals
+              </div>
+              <div class="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white/90 backdrop-blur-sm">
+                Track progress
+              </div>
+              <div class="rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white/90 backdrop-blur-sm">
+                Review outcomes
+              </div>
+            </div>
+          </div>
+
+          <!-- Bottom feature card -->
+          <div class="relative z-10 rounded-2xl border border-white/20 bg-white/10 p-5 backdrop-blur-md">
+            <p class="mb-3 text-xs font-bold uppercase tracking-wider text-white/60">Platform capabilities</p>
+            <ul class="space-y-2.5 text-sm text-white/90">
+              <li class="flex items-start gap-2.5">
+                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-dt-500/40 text-xs text-dt-200">✓</span>
+                Role-based access aligned to your org structure
+              </li>
+              <li class="flex items-start gap-2.5">
+                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-dt-500/40 text-xs text-dt-200">✓</span>
+                Full KPI lifecycle from self-assessment to approval
+              </li>
+              <li class="flex items-start gap-2.5">
+                <span class="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-dt-500/40 text-xs text-dt-200">✓</span>
+                Scorecards and performance insights
+              </li>
+            </ul>
+          </div>
+        </aside>
+
+        <section class="flex flex-col justify-center px-6 py-8 sm:px-10 lg:px-12">
+          <div class="mx-auto w-full max-w-md">
+            <div class="mb-8">
+              <p class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">Sign in</p>
+              <h2 class="mt-2 text-3xl font-bold text-slate-900">Welcome back</h2>
+              <p class="mt-2 text-sm text-slate-500">Sign in with the email address assigned to your account.</p>
+            </div>
+
+            <div *ngIf="error" class="mb-6 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700" role="alert">
+              {{ error }}
+            </div>
+
+            <form [formGroup]="loginForm" (ngSubmit)="onSubmit()" class="space-y-5" novalidate>
+              <div>
+                <label for="email" class="mb-2 block text-sm font-semibold text-slate-700">Email address</label>
+                <input
+                  id="email"
+                  type="email"
+                  formControlName="email"
+                  class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-dt-400 focus:outline-none focus:ring-4 focus:ring-dt-100 transition"
+                  placeholder="name@example.com"
+                  [attr.aria-invalid]="submitted && f['email'].invalid"
+                  [attr.aria-describedby]="submitted && f['email'].invalid ? 'email-error' : null"
+                  autocomplete="email"
+                />
+                <div *ngIf="submitted && f['email'].invalid" id="email-error" class="mt-1.5 text-sm text-rose-600">
+                  <p *ngIf="f['email'].errors?.['required']">Email is required.</p>
+                  <p *ngIf="f['email'].errors?.['email']">Enter a valid email address.</p>
+                </div>
+              </div>
+
+              <div>
+                <div class="mb-2 flex items-center justify-between">
+                  <label for="password" class="block text-sm font-semibold text-slate-700">Password</label>
+                </div>
+
+                <div class="relative">
+                  <input
+                    id="password"
+                    [type]="passwordVisible ? 'text' : 'password'"
+                    formControlName="password"
+                    class="w-full rounded-lg border border-slate-300 bg-white px-4 py-2.5 pr-16 text-sm text-slate-900 placeholder:text-slate-400 focus:border-dt-400 focus:outline-none focus:ring-4 focus:ring-dt-100 transition"
+                    placeholder="Enter your password"
+                    [attr.aria-invalid]="submitted && f['password'].invalid"
+                    [attr.aria-describedby]="submitted && f['password'].invalid ? 'password-error' : null"
+                    autocomplete="current-password"
+                  />
+                  <button
+                    type="button"
+                    (click)="togglePasswordVisibility()"
+                    class="absolute inset-y-0 right-0 px-4 text-xs font-semibold text-slate-500 hover:text-slate-700"
+                    [attr.aria-label]="passwordVisible ? 'Hide password' : 'Show password'"
+                  >
+                    {{ passwordVisible ? 'Hide' : 'Show' }}
+                  </button>
+                </div>
+
+                <div *ngIf="submitted && f['password'].invalid" id="password-error" class="mt-1.5 text-sm text-rose-600">
+                  <p *ngIf="f['password'].errors?.['required']">Password is required.</p>
+                  <p *ngIf="f['password'].errors?.['minlength']">Password must be at least 8 characters.</p>
+                </div>
+                <p class="text-xs text-slate-500">
+                  Forgot your password? Contact your administrator to restore account access.
+                </p>
+              </div>
+
+              <button
+                type="submit"
+                [disabled]="loading"
+                class="inline-flex w-full items-center justify-center rounded-lg bg-dt-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-dt-700 focus:outline-none focus:ring-4 focus:ring-dt-200 disabled:cursor-not-allowed disabled:bg-slate-400"
+              >
+                <span *ngIf="!loading">Sign In Securely</span>
+                <span *ngIf="loading" class="flex items-center justify-center">
+                  <svg class="-ml-1 mr-2 h-4 w-4 animate-spin text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Signing in...
+                </span>
+              </button>
+            </form>
+
+            <div *ngIf="demoCredentials as demo" class="mt-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-xs text-sky-900">
+              <p class="font-semibold">Development demo account</p>
+              <p class="mt-1">Email: <code class="rounded bg-white px-1.5 py-0.5 text-slate-700">{{ demo.email }}</code></p>
+              <p class="mt-1">Password: <code class="rounded bg-white px-1.5 py-0.5 text-slate-700">{{ demo.password }}</code></p>
+              <p class="mt-2 text-sky-800">Available only when the application runs with the dev profile.</p>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
