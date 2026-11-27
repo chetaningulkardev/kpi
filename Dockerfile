@@ -39,7 +39,7 @@ RUN mvn -B -DskipTests package
 # ---------------------------------------------------------------------------
 # Stage 3 — runtime
 # ---------------------------------------------------------------------------
-FROM eclipse-temurin:26-jre-alpine
+FROM eclipse-temurin:27-jre-alpine
 
 # Run unprivileged: a compromise in the app should not be able to modify the
 # image or reach anything owned by root.
